@@ -1,0 +1,22 @@
+{
+  "name": "plugin-hkControl",
+  "version": "0.0.1",
+  "description": "Jeedom Plugin for Homekit",
+  "main": "resources/hkControl.js",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nebzhb/plugin-hkControl.git"
+  },
+  "author": "Benjamin RENARD <nebz@nebz.be>",
+  "license": "AGPL",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "@babel/core": ">=7.22.17",
+    "@babel/eslint-parser": "^7.22.15",
+    "eslint": "^8.48.0"
+  }
+}
