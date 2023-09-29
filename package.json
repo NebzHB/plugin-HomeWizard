@@ -1,14 +1,14 @@
 {
-  "name": "plugin-hkControl",
+  "name": "plugin-HomeWizard",
   "version": "0.0.1",
-  "description": "Jeedom Plugin for Homekit",
-  "main": "resources/hkControl.js",
+  "description": "Jeedom Plugin for HoweWizard",
+  "main": "resources/HoweWizard.js",
   "scripts": {
     "lint": "eslint ."
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nebzhb/plugin-hkControl.git"
+    "url": "git+https://github.com/nebzhb/plugin-HoweWizard.git"
   },
   "author": "Benjamin RENARD <nebz@nebz.be>",
   "license": "AGPL",
