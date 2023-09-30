@@ -41,11 +41,28 @@ for(var name in conf) {
 	}
 }
 
-
+const conn = {};
 // prepare callback for discovery
 const discovery = HW.HomeWizardEnergyDiscovery();
 discovery.on('response', async (mdns) => {
 	Logger.log("Découverte de : "+JSON.stringify(mdns),LogType.DEBUG);
+	for(const elmt in mdns) {
+		let index=mdns.txt.product_type+'_'+mdns.txt.serial;
+		switch(mdns.txt.product_type) {
+			case "HWE-P1":
+				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, {
+					polling: {
+						interval: 950,
+						stopOnError: false,
+					},
+				});
+				conn[index].polling.getParsedTelegram.start();
+				conn[index].polling.getParsedTelegram.on('response', response => {
+					console.log(response);
+				});
+			break;
+		}
+	}
 	/*{
 	  ip: '192.168.1.146',
 	  hostname: 'p1meter-0ACDC0.local',
