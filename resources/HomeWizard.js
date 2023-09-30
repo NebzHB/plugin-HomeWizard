@@ -43,40 +43,8 @@ for(var name in conf) {
 
 const conn = {};
 // prepare callback for discovery
-const discovery = HW.HomeWizardEnergyDiscovery();
-discovery.on('response', async (mdns) => {
-	Logger.log("Découverte de : "+JSON.stringify(mdns),LogType.DEBUG);
-	for(const elmt in mdns) {
-		let index=mdns.txt.product_type+'_'+mdns.txt.serial;
-		switch(mdns.txt.product_type) {
-			case "HWE-P1":
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, {
-					polling: {
-						interval: 950,
-						stopOnError: false,
-					},
-				});
-				conn[index].polling.getParsedTelegram.start();
-				conn[index].polling.getParsedTelegram.on('response', response => {
-					console.log(response);
-				});
-			break;
-		}
-	}
-	/*{
-	  ip: '192.168.1.146',
-	  hostname: 'p1meter-0ACDC0.local',
-	  fqdn: 'p1meter-0ACDC0._hwenergy._tcp.local',
-	  txt: {
-	    api_enabled: '1',
-	    path: '/api/v1',
-	    serial: '5c2faf0acdc0',
-	    product_type: 'HWE-P1',
-	    product_name: 'P1 meter'
-	  }
-	}*/
+const discovery = new HW.HomeWizardEnergyDiscovery();
 
-});
 
 
 
@@ -97,54 +65,7 @@ myCommands.reDiscover = function(req,res) {
 
 	if(res) {res.json({'result':'ok'});}
 };
-myCommands.listDiscover = function(req,res) {
-	res.type('json');
 
-	Logger.log("Reçu une demande de listDécouverte...",LogType.Debug); 
-
-	res.json({'result':'ok','list':discovery.list()});
-};
-
-
-
-myCommands.identify = function(req,res,next) {
-	res.type('json');
-
-	Logger.log("Reçu une demande d'identification...",LogType.INFO); 
-
-	if ('id' in req.query === false) {
-		const error="Pour identifier, le démon a besoin de l'id";
-		Logger.log(error,LogType.ERROR); 
-		res.json({'result':'ko','msg':error});
-		return;
-	}
-	if ('char' in req.query === false) {
-		const error="Pour identifier, le démon a besoin de la caractéristique";
-		Logger.log(error,LogType.ERROR); 
-		res.json({'result':'ko','msg':error});
-		return;
-	}
-	if (typeof conf.pairings[req.query.id] != 'object') {
-		const error="Cet équipement n'est pas appairé";
-		Logger.log(error,LogType.ERROR); 
-		res.json({'result':'ko','msg':error});
-		return;
-	}
-	if (typeof conf.pairings[req.query.id].client != 'object' || conf.pairings[req.query.id].client == null) {
-		const error="Cet équipement n'est pas connecté (pas de \"Bonjour\" reçu)";
-		Logger.log(error,LogType.ERROR); 
-		res.json({'result':'ko','msg':error});
-		return;
-	}
-	res.status(202);
-	var set={};
-	set[req.query.char]=true;
-	Logger.log("Identification de "+conf.pairings[req.query.id].name+" sur "+JSON.stringify(set),LogType.DEBUG);
-	conf.pairings[req.query.id].client.setCharacteristics(set).then(() => {
-		Logger.log(conf.pairings[req.query.id].name+" identifié !",LogType.INFO);
-		res.json({'result':'ok'});	
-	}).catch(next);
-};
 
 
 
@@ -170,41 +91,24 @@ myCommands.test = function(req,res) {
 /** Stop the server **/
 myCommands.stop = function(req, res) {
 	Logger.log("Recu de jeedom: Demande d'arret",LogType.INFO);
-	var unSubscr=[];
-	for(var p in conf.pairings) {
-		if (hasOwnProperty.call(conf.pairings,p) && conf.pairings[p].client != null && typeof conf.pairings[p].client == 'object') {
-			conf.pairings[p].client.removeAllListeners('event-disconnect');
-			conf.pairings[p].client.removeAllListeners('disconnect');
-			conf.pairings[p].client.removeAllListeners('event');
-			if(conf.pairings[p].client.subscribedCharacteristics && conf.pairings[p].client.subscribedCharacteristics.length) {
-				Logger.log("Désouscription de "+conf.pairings[p].name+" sur "+conf.pairings[p].client.subscribedCharacteristics,LogType.DEBUG);
-				unSubscr.push(conf.pairings[p].client.unsubscribeCharacteristics().catch((error) => { return error; })); 
-				unSubscr.push(conf.pairings[p].client.close().catch((error) => { return error; })); 
-			}
-		}
-	}
 	discovery.stop();
-	Promise.raceAll(unSubscr,(unSubscr.length*1000),'TimedOut').then((r) => {
-		if(r.length) {
-			var hasError=false;
-			for(const p of r) {
-				if(p != null) {hasError=true;}
-			}
-			if(hasError) {
-				Logger.log("Unsubscribes Errors (null is ok):"+JSON.stringify(r),LogType.DEBUG);
-			}
-		}
-		res.end();	
-		server.close(() => {
-			Logger.log("Exit",LogType.INFO);
-			process.exit(0);
-		});
+	for(const c in conn) {
+		console.log(conn[c].isPolling.getData);
+		if(conn[c].isPolling.getData) {conn[c].polling.getData.stop();}
+	}
+	res.json({'result':'ok'});
+	server.close(() => {
+		Logger.log("Exit",LogType.INFO);
+		process.exit(0);
 	});
+};
+
+const pollingIntervals={
+	"HWE-P1":950,
 };
 
 // prepare commands
 app.get('/reDiscover', myCommands.reDiscover);
-app.get('/listDiscover', myCommands.listDiscover);
 app.get('/test', myCommands.test);
 app.get('/stop', myCommands.stop);
 app.use(function(err, req, res, _next) {
@@ -212,10 +116,56 @@ app.use(function(err, req, res, _next) {
 	Logger.log(err,LogType.ERROR);
 	res.json({'result':'ko','msg':err});
 });
+
 /** Listen **/
-server = app.listen(conf.serverPort, () => {
+server = app.listen(conf.serverPort || 4563, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
 	discovery.start();
+	
+	discovery.on('response', async (mdns) => {
+		Logger.log("Découverte de : "+JSON.stringify(mdns),LogType.DEBUG);
+		if(mdns.txt.api_enabled == 0) {Logger.log("API pas activée dans l'application, veuillez activer l'api dans l'application...",LogType.INFO);return;}
+
+		let index=mdns.txt.product_type+'_'+mdns.txt.serial;
+		switch(mdns.txt.product_type) {
+			case "HWE-P1":
+				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, {
+					polling: {
+						interval: pollingIntervals['HWE-P1'],
+						stopOnError: false,
+					},
+				});
+				console.log(await conn[index].identify());
+				conn[index].polling.getData.start();
+				conn[index].polling.getData.on('response', response => {
+					console.log(index,response);
+				});
+				conn[index].polling.getData.on('error', error => {
+					Logger.log(error,LogType.ERROR);
+				});
+			break;
+		}
+
+		/*{
+		  ip: '192.168.1.146',
+		  hostname: 'p1meter-0ACDC0.local',
+		  fqdn: 'p1meter-0ACDC0._hwenergy._tcp.local',
+		  txt: {
+			api_enabled: '1',
+			path: '/api/v1',
+			serial: '5c2faf0acdc0',
+			product_type: 'HWE-P1',
+			product_name: 'P1 meter'
+		  }
+		}*/
+
+	});
+	discovery.on('error', error => {
+	  Logger.log(error,LogType.ERROR);
+	});
+	discovery.on('warning', error => {
+	  Logger.log(error,LogType.WARNING);
+	});
 });
 
 
