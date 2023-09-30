@@ -31,16 +31,10 @@ cd ${BASEDIR};
 sudo rm -rf node_modules &>/dev/null
 sudo rm -f package-lock.json &>/dev/null
 
-step 70 "Installation des librairies, veuillez patienter svp"
+step 80 "Installation des librairies, veuillez patienter svp"
 silent sudo mkdir node_modules 
 silent sudo chown -R www-data:www-data . 
 tryOrStop sudo npm install --no-fund --no-package-lock --no-audit
 silent sudo chown -R www-data:www-data . 
-
-step 90 "Mise à jour class utilitaires"
-silent wget https://raw.githubusercontent.com/NebzHB/hkLibs/main/homekitEnums.class.php -O $BASEDIR/../core/class/homekitEnums.class.php
-silent wget https://raw.githubusercontent.com/NebzHB/hkLibs/main/homekitUtils.class.php -O $BASEDIR/../core/class/homekitUtils.class.php
-silent sudo chown www-data:www-data homekit*
-silent sudo chmod 775 homekit* 
 
 post
