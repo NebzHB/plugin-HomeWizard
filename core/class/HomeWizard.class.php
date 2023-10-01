@@ -58,6 +58,9 @@ class HomeWizard extends eqLogic {
 		
 		switch ($eventType)
 		{
+			case 'discovery':
+				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode(init('mdns')));
+			break;
 			case 'createEq':
 				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode(init('mdns')));
 				$mdns = init('mdns');
@@ -95,81 +98,6 @@ class HomeWizard extends eqLogic {
 					]
 				];
 				self::createEq($eq,false);
-			break;
-			case 'getAccessories':
-				$refresh = ((init('refresh')=='true')?true:false);
-				//$acc = base64_decode(init('accessory'));
-				$acc = self::getPairing(init('id'));
-				log::add('HomeWizard', 'info', 'getAccessories ('.$refresh.') :'.json_encode($acc));
-				
-				HomeWizard::repertory(init('id'),$acc['accessories']);
-				
-				$eqp = eqLogic::byLogicalId(init('id'),'HomeWizard');
-				if (is_object($eqp)){
-					$onlineCmd = $eqp->getCmd(null, 'online');
-					if (is_object($onlineCmd)) {
-						$changed = $eqp->checkAndUpdateCmd('online',1);
-					}
-					//$eqp->setConfiguration('accessory', json_decode(["accessories"=>$acc],true));
-					$eqp->save(!$refresh);
-					if ($changed) 
-						$eqp->refreshWidget();
-				}
-			break;
-			case 'pairedEq':
-				log::add('HomeWizard', 'debug', 'pairedEq :'.init('id').' '.init('result'));
-				$eqp = eqlogic::byLogicalId(init('id'),'HomeWizard');
-				if (is_object($eqp)){
-					$onlineCmd = $eqp->getCmd(null, 'online');
-					if (is_object($onlineCmd)) {
-						$changed = $eqp->checkAndUpdateCmd('online',1);
-					}
-					$eqp->setConfiguration('paired', true);
-					$eqp->setIsEnable(1);
-					$eqp->save(true);
-					if ($changed) 
-						$eqp->refreshWidget();
-				}
-			break;
-			case 'prepairedEq':
-				log::add('HomeWizard', 'debug', 'prepairedEq :'.init('id').' '.init('result'));
-				$eqp = eqlogic::byLogicalId(init('id'),'HomeWizard');
-				if (is_object($eqp)){
-					$onlineCmd = $eqp->getCmd(null, 'online');
-					if (is_object($onlineCmd)) {
-						$changed = $eqp->checkAndUpdateCmd('online',1);
-					}
-					$eqp->setConfiguration('pre-paired', true);
-					$eqp->save(true);
-					if ($changed) 
-						$eqp->refreshWidget();
-				}
-			break;
-			case 'postpairedEq':
-				log::add('HomeWizard', 'debug', 'postpairedEq :'.init('id').' '.init('result'));
-				$eqp = eqlogic::byLogicalId(init('id'),'HomeWizard');
-				if (is_object($eqp)){
-					$onlineCmd = $eqp->getCmd(null, 'online');
-					if (is_object($onlineCmd)) {
-						$changed = $eqp->checkAndUpdateCmd('online',1);
-					}
-					$eqp->setConfiguration('paired', true);
-					$eqp->setConfiguration('pre-paired', false);
-					$eqp->setIsEnable(1);
-					$eqp->save(true);
-					if ($changed) 
-						$eqp->refreshWidget();
-				}
-			break;
-			case 'unPairedEq':
-				log::add('HomeWizard', 'debug', 'unPairedEq :'.init('id').' '.init('result'));
-				$eqp = eqlogic::byLogicalId(init('id'),'HomeWizard');
-				if (is_object($eqp)){
-					$eqp->setConfiguration('paired', false);
-					//$eqp->setConfiguration('accessory', '');
-					$eqp->setIsEnable(0);
-					$eqp->save(true);
-				}
 			break;
 			case 'updateValue':
 				//log::add('HomeWizard', 'debug', 'updateValue :'.init('id').' '.init('aidiid').' '.init('value'));
