@@ -10,7 +10,7 @@
 	"author" : "Nebz",
 	"hasDependency" : true,
 	"hasOwnDeamon" : true,
-	"require" : "4.0",
+	"require" : "4.2",
 	"category" : "devicecommunication",
 	"issue" : "https://github.com/NebzHB/jeedom_docs/issues",
 	"changelog" : "https://nebzhb.github.io/jeedom_docs/plugins/HomeWizard/fr_FR/changelog",
