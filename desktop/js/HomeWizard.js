@@ -17,9 +17,9 @@
 
 var forbiddenPIN = ["000-00-000","111-11-111","222-22-222","333-33-333","444-44-444","555-55-555","666-66-666","777-77-777","888-88-888","999-99-999","123-45-678","876-54-321"];
 
- $('#bt_healthhkControl').on('click', function() {
-    $('#md_modal').dialog({title: "{{Santé hkControl}}"});
-    $('#md_modal').load('index.php?v=d&plugin=hkControl&modal=health').dialog('open');
+ $('#bt_healthHomeWizard').on('click', function() {
+    $('#md_modal').dialog({title: "{{Santé HomeWizard}}"});
+    $('#md_modal').load('index.php?v=d&plugin=HomeWizard&modal=health').dialog('open');
 });
 
 $('#bt_resetEqlogicSearch').on('click', function() {
@@ -30,7 +30,7 @@ $('#bt_resetEqlogicSearch').on('click', function() {
 $('.eqLogicAction[data-action=reDiscover]').on('click', function (e) {
 	$.ajax({// fonction permettant de faire de l'ajax
 		type: "POST", // methode de transmission des données au fichier php
-		url: "plugins/hkControl/core/ajax/hkControl.ajax.php", // url du fichier php
+		url: "plugins/HomeWizard/core/ajax/HomeWizard.ajax.php", // url du fichier php
 		data: {
 			action: "reDiscover"
 		},
@@ -85,7 +85,7 @@ $('#bt_Pair').on('click', function() {
 		$('#verif_logo').removeClass("fa-question-circle fa-times fa-check").addClass("fa-spinner fa-spin");
 		$.ajax({
 			type: 'POST',
-			url: 'plugins/hkControl/core/ajax/hkControl.ajax.php',
+			url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
 			data: {
 				action: 'prePair',
 				id: $('.eqLogicAttr[data-l1key=logicalId]')[0].value,
@@ -136,7 +136,7 @@ $('#bt_Pair').on('click', function() {
 			$('#verif_logo').removeClass("fa-question-circle fa-times fa-check").addClass("fa-spinner fa-spin");
 			$.ajax({
 				type: 'POST',
-				url: 'plugins/hkControl/core/ajax/hkControl.ajax.php',
+				url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
 				data: {
 					action: 'pair',
 					id: $('.eqLogicAttr[data-l1key=logicalId]')[0].value,
@@ -201,7 +201,7 @@ $('#bt_Pair').on('click', function() {
 		$('#verif_logo').removeClass("fa-question-circle fa-times fa-check").addClass("fa-spinner fa-spin");
 		$.ajax({
 			type: 'POST',
-			url: 'plugins/hkControl/core/ajax/hkControl.ajax.php',
+			url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
 			data: {
 				action: 'postPair',
 				id: $('.eqLogicAttr[data-l1key=logicalId]')[0].value,
@@ -253,7 +253,7 @@ $('#bt_Pair').on('click', function() {
 		$('#verif_logo').removeClass("fa-question-circle fa-times fa-check").addClass("fa-spinner fa-spin");
 		$.ajax({
 			type: 'POST',
-			url: 'plugins/hkControl/core/ajax/hkControl.ajax.php',
+			url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
 			data: {
 				action: 'unpair',
 				id: $('.eqLogicAttr[data-l1key=logicalId]')[0].value
@@ -302,7 +302,7 @@ $('#bt_refresh').on('click', function() {
 	if (isPaired=="true") {
 		$.ajax({
 			type: 'POST',
-			url: 'plugins/hkControl/core/ajax/hkControl.ajax.php',
+			url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
 			data: {
 				action: 'refresh',
 				id: $('.eqLogicAttr[data-l1key=logicalId]')[0].value
@@ -455,14 +455,14 @@ function addCmdToTable(_cmd) {
 	
 }
 
-$('body').on('hkControl::includeDevice', function(_event,_options) {
+$('body').on('HomeWizard::includeDevice', function(_event,_options) {
     console.log("includeDevice received");
     if (modifyWithoutSave) {
         $('#div_inclusionAlert').showAlert({message: "{{Un périphérique vient d'être inclu. Réactualisation de la page}}", level: 'warning'});
     } else {
             window.location.reload();
         /*} else {
-            window.location.href = 'index.php?v=d&p=hkControl&m=hkControl&id=' + _options;*/
+            window.location.href = 'index.php?v=d&p=HomeWizard&m=HomeWizard&id=' + _options;*/
         
     }
 });
