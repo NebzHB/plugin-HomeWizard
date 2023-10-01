@@ -1,7 +1,6 @@
 "use strict";
 
-const request = require('axios');
-
+const axios = require('axios');
 
 var busy = false;
 var jeedomSendQueue = [];
@@ -9,7 +8,6 @@ var jeedomSendQueue = [];
 var thisUrl="";
 var thisApikey="";
 var thisType="";
-var this42="";
 var thislogLevel="";
 
 var processJeedomSendQueue = function()
@@ -22,32 +20,39 @@ var processJeedomSendQueue = function()
 		return;
 	}
 	// console.log('Traitement du message : ' + JSON.stringify(nextMessage));
-	request.post({url:thisUrl, form:nextMessage.data}, function(err, response, body) {
-		if(err)
-		{
-			if(thislogLevel == 'debug') { console.error("Erreur communication avec Jeedom (retry "+nextMessage.tryCount+"/5): ",err,response,body); }
+	axios.post(thisUrl,nextMessage.data,{headers:{"Content-Type": "multipart/form-data"}}).then(response => {
+		console.log(response);
+		if(response.data.error) {
+			console.error("Erreur communication avec Jeedom (retry "+nextMessage.tryCount+"/5): ",response.data.error.code+' : '+response.data.error.message);
 			if (nextMessage.tryCount < 5)
 			{
 				nextMessage.tryCount++;
 				jeedomSendQueue.unshift(nextMessage);
 			}
+			setTimeout(processJeedomSendQueue, 1000+(1000*nextMessage.tryCount));
+			return;
 		}
-		else if(thislogLevel == 'debug' && response.body.trim() != '') { console.log("Réponse de Jeedom : ", response.body); }
+		if(thislogLevel == 'debug' && response) { console.log("Réponse de Jeedom : ", response); }
 		setTimeout(processJeedomSendQueue, 0.01*1000);
+	}).catch(err => {
+		if(err) { console.error("Erreur communication avec Jeedom (retry "+nextMessage.tryCount+"/5): ",err.code+' : '+err.response.status+' '+err.response.statusText); }
+		if (nextMessage.tryCount < 5)
+		{
+			nextMessage.tryCount++;
+			jeedomSendQueue.unshift(nextMessage);
+		}
+		setTimeout(processJeedomSendQueue, 1000+(1000*nextMessage.tryCount));
 	});
 };
 
 var sendToJeedom = function(data)
 {
 	// console.log("sending with "+thisUrl+" and "+thisApikey);
-	if(this42 == '0') {
-		data.type = thisType;
-		data.apikey= thisApikey;
-	} else {
-		data.type = 'event';
-		data.apikey= thisApikey;
-		data.plugin= thisType;
-	}
+
+	data.type = 'event';
+	data.apikey= thisApikey;
+	data.plugin= thisType;
+
 	var message = {};
 	message.data = data;
 	message.tryCount = 0;
@@ -59,12 +64,11 @@ var sendToJeedom = function(data)
 };
 
 
-module.exports = ( type, url, apikey, jeedom42, logLevel ) => { 
+module.exports = ( type, url, apikey, logLevel ) => { 
 	// console.log("importing jeedom with "+url+" and "+apikey);
 	thisUrl=url;
 	thisApikey=apikey;
 	thisType=type;
-	this42=jeedom42;
 	thislogLevel=logLevel;
 	return sendToJeedom;
 };
