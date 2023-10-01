@@ -21,7 +21,6 @@ var processJeedomSendQueue = function()
 	}
 	// console.log('Traitement du message : ' + JSON.stringify(nextMessage));
 	axios.post(thisUrl,nextMessage.data,{headers:{"Content-Type": "multipart/form-data"}}).then(response => {
-		console.log(response);
 		if(response.data.error) {
 			console.error("Erreur communication avec Jeedom (retry "+nextMessage.tryCount+"/5): ",response.data.error.code+' : '+response.data.error.message);
 			if (nextMessage.tryCount < 5)
@@ -32,7 +31,7 @@ var processJeedomSendQueue = function()
 			setTimeout(processJeedomSendQueue, 1000+(1000*nextMessage.tryCount));
 			return;
 		}
-		if(thislogLevel == 'debug' && response) { console.log("Réponse de Jeedom : ", response); }
+		if(thislogLevel == 'debug' && response.data) { console.log("Réponse de Jeedom : ", response); }
 		setTimeout(processJeedomSendQueue, 0.01*1000);
 	}).catch(err => {
 		if(err) { console.error("Erreur communication avec Jeedom (retry "+nextMessage.tryCount+"/5): ",err.code+' : '+err.response.status+' '+err.response.statusText); }
