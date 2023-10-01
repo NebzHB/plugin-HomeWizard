@@ -3,8 +3,8 @@ if (!isConnect('admin')) {
     throw new Exception('{{401 - Accès non autorisé}}');
 }
 
-sendVarToJS('eqType', 'hkControl');
-$eqLogics = eqLogic::byType('hkControl');
+sendVarToJS('eqType', 'HomeWizard');
+$eqLogics = eqLogic::byType('HomeWizard');
 
 $has = ["Bridge"=>false,"Other"=>false];
 foreach ($eqLogics as $eqLogic) {
@@ -42,7 +42,7 @@ foreach ($eqLogics as $eqLogic) {
 				<br />
 				<span>{{Configuration}}</span>
 			</div>
-			<div class="cursor logoSecondary" id="bt_healthhkControl">
+			<div class="cursor logoSecondary" id="bt_healthHomeWizard">
 				<i class="fas fa-medkit"></i>
 				</br />
 				<span>{{Santé}}</span>
@@ -210,11 +210,6 @@ foreach ($eqLogics as $eqLogic) {
 										<div class="input-group">
 											<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="pin" placeholder="{{123-12-123}}"/><span class="input-group-addon" id="verif_pairing"><i class="fas fa-question-circle" id="verif_logo"></i></span><a class="btn btn-warning form-control roundedRight" style="display: none;" id="bt_Pair"><i class="far fa-handshake"></i> {{Appairer}}</a><a class="btn btn-warning form-control roundedRight" style="display: none;" id="bt_postPair"><i class="far fa-handshake"></i> {{Post-Appairer}}</a><a class="btn btn-success form-control roundedRight" style="display: none;" id="bt_unPair"><i class="far fa-handshake"></i> {{Désappairer}}</a>
 										</div>
-										<br />
-										<div class="center">
-											({{Recherchez une de ces étiquettes sur votre équipement ou la boîte.}})
-											<img src="/plugins/hkControl/core/img/homekit-pairing-code-example-labels.webp" title="{{Recherchez une de ces étiquettes sur votre équipement ou la boîte. Voir documentation de votre équipement.}}" />
-										</div>
 									</div>
 								</div>
 							</fieldset>
@@ -282,5 +277,5 @@ foreach ($eqLogics as $eqLogic) {
 		</div>
 	</div>
 </div>
-<?php include_file('desktop', 'hkControl', 'js', 'hkControl'); ?>
+<?php include_file('desktop', 'HomeWizard', 'js', 'HomeWizard'); ?>
 <?php include_file('core', 'plugin.template', 'js'); ?>
