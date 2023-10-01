@@ -18,7 +18,7 @@
 if (!isConnect('admin')) {
 	throw new Exception('401 Unauthorized');
 }
-$eqLogics = eqLogic::byType('hkControl');
+$eqLogics = eqLogic::byType('HomeWizard');
 ?>
 
 <table class="table table-condensed tablesorter" id="table_healthaTVremote">
