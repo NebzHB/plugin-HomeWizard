@@ -10,7 +10,7 @@ Logger.setLogLevel(LogType.DEBUG);
 const conf={};
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const pollingIntervals={
-	"HWE-P1":1000,
+	"HWE-P1":5000,
 };
 
 
@@ -107,7 +107,7 @@ app.use(function(err, req, res, _next) {
 
 
 /** Listen **/
-const server = app.listen(conf.serverPort || 4563, () => {
+const server = app.listen(conf.serverPort, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
 	discovery.start();
 	
@@ -116,9 +116,9 @@ const server = app.listen(conf.serverPort || 4563, () => {
 		if(mdns.txt.api_enabled == 0) {Logger.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
 
 		const index=mdns.txt.product_type+'_'+mdns.txt.serial;
+		jsend({eventType: 'createEq', id: index, mdns: mdns});
 		switch(mdns.txt.product_type) {
-			case "HWE-P1":
-				jsend({eventType: 'discovery', id: index, mdns: mdns});
+			case "HWE-P1": // P1 Meter
 				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, {
 					polling: {
 						interval: pollingIntervals['HWE-P1'],
@@ -133,6 +133,18 @@ const server = app.listen(conf.serverPort || 4563, () => {
 				conn[index].polling.getData.on('error', error => {
 					Logger.log(error,LogType.ERROR);
 				});
+			break;
+			case "HWE-SKT": // Energy Socket
+			
+			break;
+			case "HWE-WTR": // Watermeter (only on USB)
+			
+			break;
+			case "SDM230-wifi": // kWh meter (1 phase)
+			
+			break;
+			case "SDM630-wifi": // kWh meter (3 phases)
+			
 			break;
 		}
 
