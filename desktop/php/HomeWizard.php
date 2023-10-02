@@ -262,7 +262,6 @@ foreach ($eqLogics as $eqLogic) {
 					<thead>
 						<tr>
 							<th>{{Nom}}</th>
-							<th>{{AID IID}}</th>
 							<th>{{Service}}</th>
 							<th>{{Valeurs possibles}}</th>
 							<th>{{Valeur}}</th>
