@@ -391,8 +391,8 @@ class HomeWizard extends eqLogic {
 	}	
 	
 	public function getImage(){
-		$typeId=$this->getConfiguration('typeId');
-		$catIcon = 'plugins/HomeWizard/core/config/images/category/'.$typeId.'.png';
+		$type=$this->getConfiguration('type');
+		$catIcon = 'plugins/HomeWizard/core/config/img/'.$type.'.png';
 		$base = dirname(__FILE__) . '/../../../../';
 		
 		if(file_exists($base.$catIcon)) return $catIcon;
