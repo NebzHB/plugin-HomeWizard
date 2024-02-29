@@ -6,13 +6,6 @@ if (!isConnect('admin')) {
 sendVarToJS('eqType', 'HomeWizard');
 $eqLogics = eqLogic::byType('HomeWizard');
 
-$has = ["Bridge"=>false,"Other"=>false];
-foreach ($eqLogics as $eqLogic) {
-	$type=$eqLogic->getConfiguration('type','');
-	if($type == "Bridge" || $type == "BridgedAccessory") $has['Bridge']=true;
-	else $has['Other']=true;
-}
-
 ?>
 <style>
 	.eqLogicAttr[data-l2key=pin] {
@@ -48,87 +41,30 @@ foreach ($eqLogics as $eqLogic) {
 				<span>{{Santé}}</span>
 			</div>
 		</div>
-		<?php
-			if($has['Other']):
-		?>
-			<legend><i class="fab fa-apple"></i>  {{Mes Accessoires Réseau Homekit}}</legend>
-			<div class="input-group" style="margin-bottom:5px;">
-				<input class="form-control roundedLeft" placeholder="{{Rechercher}}" id="in_searchEqlogic1" />
-				<div class="input-group-btn">
-					<a id="bt_resetEqlogicSearch1" class="btn roundedRight" style="width:30px"><i class="fas fa-times"></i></a>
+		<legend><i class="fab fa-apple"></i>  {{Mes Equipements HomeWizard}}</legend>
+		<div class="input-group" style="margin-bottom:5px;">
+			<input class="form-control roundedLeft" placeholder="{{Rechercher}}" id="in_searchEqlogic1" />
+			<div class="input-group-btn">
+				<a id="bt_resetEqlogicSearch1" class="btn roundedRight" style="width:30px"><i class="fas fa-times"></i></a>
+			</div>
+		</div>
+		<div class="panel">
+			<div class="panel-body">
+				<div class="eqLogicThumbnailContainer cont1">
+					<?php
+					foreach ($eqLogics as $eqLogic) {
+						$opacity = ($eqLogic->getIsEnable()) ? '' : ' disableCard';
+						$img=$eqLogic->getImage();
+						echo '<div class="eqLogicDisplayCard cursor cont1'.$opacity.'" data-eqLogic_id="' . $eqLogic->getId() . '">';
+						echo '<img class="lazy" src="'.$img.'" style="min-height:75px !important;" />';	
+						echo "<br />";
+						echo '<span class="name">' . $eqLogic->getHumanName(true, true) . '</span>';
+						echo '</div>';
+					}
+					?>
 				</div>
 			</div>
-			<div class="panel">
-				<div class="panel-body">
-					<div class="eqLogicThumbnailContainer cont1">
-						<?php
-						foreach ($eqLogics as $eqLogic) {
-							if($eqLogic->getConfiguration('type','') == 'Bridge' || $eqLogic->getConfiguration('type','') == 'BridgedAccessory') continue;
-							$opacity = ($eqLogic->getIsEnable()) ? '' : ' disableCard';
-							$img=$eqLogic->getImage();
-							echo '<div class="eqLogicDisplayCard cursor cont1'.$opacity.'" data-eqLogic_id="' . $eqLogic->getId() . '">';
-							echo '<img class="lazy" src="'.$img.'" style="min-height:75px !important;" />';	
-							echo "<br />";
-							echo '<span class="name">' . $eqLogic->getHumanName(true, true) . '</span>';
-							echo '</div>';
-						}
-						?>
-					</div>
-				</div>
-			</div>
-		<?php
-			endif;
-			if($has['Bridge']):
-		?>
-		<legend><i class="fab fa-apple"></i>  {{Mes Ponts Réseau Homekit}}</legend>
-		<?php
-				$i=2;
-				foreach ($eqLogics as $eqLogicBridge) :
-					if($eqLogicBridge->getConfiguration('type','') != 'Bridge') continue;
-		?>
-					<legend> <?php echo $eqLogicBridge->getHumanName(true)?></legend>
-					<div class="input-group" style="margin-bottom:5px;">
-						<input class="form-control roundedLeft searchBox" placeholder="{{Rechercher}}" id="in_searchEqlogic<?php echo $i?>" />
-						<div class="input-group-btn">
-							<a id="bt_resetEqlogicSearch<?php echo $i?>" class="btn roundedRight" style="width:30px"><i class="fas fa-times"></i></a>
-						</div>
-					</div>
-					<div class="panel">
-						<div class="panel-body">
-							<div class="eqLogicThumbnailContainer cont<?php echo $i?>">
-								<?php
-								foreach ($eqLogics as $eqLogic) {
-									if(strpos($eqLogic->getLogicalId(),$eqLogicBridge->getLogicalId()) === false) continue;
-									if($eqLogic->getConfiguration('type','') != 'Bridge') continue;
-									$opacity = ($eqLogic->getIsEnable()) ? '' : ' disableCard';
-									$img=$eqLogic->getImage();
-									echo '<div class="eqLogicDisplayCard cursor cont'.$i.$opacity.'" data-eqLogic_id="' . $eqLogic->getId() . '">';
-									echo '<img class="lazy" src="'.$img.'" style="min-height:75px !important;" />';	
-									echo "<br />";
-									echo '<span class="name">' . $eqLogic->getHumanName(true, true) . '</span>';
-									echo '</div>';
-								}
-								foreach ($eqLogics as $eqLogic) {
-									if(strpos($eqLogic->getLogicalId(),$eqLogicBridge->getLogicalId()) === false) continue;
-									if($eqLogic->getConfiguration('type','') != 'BridgedAccessory') continue;
-									$opacity = ($eqLogic->getIsEnable()) ? '' : ' disableCard';
-									$img=$eqLogic->getImage();
-									$toRemove = (($eqLogic->getConfiguration('toRemove',0)==1)?'style="text-decoration: line-through;"':'');
-									echo '<div class="eqLogicDisplayCard cursor cont'.$i.$opacity.'" data-eqLogic_id="' . $eqLogic->getId() . '">';
-									echo '<img class="lazy" src="'.$img.'" style="min-height:75px !important;" />';	
-									echo "<br />";
-									echo '<span class="name" '.$toRemove.'>' . $eqLogic->getHumanName(true, true) . '</span>';
-									echo '</div>';
-								}
-								?>
-							</div>
-						</div>
-					</div>
-		<?php
-				$i++;
-				endforeach;
-			endif;
-		?>
+		</div>
 	</div>
 	<div class="col-lg-12 eqLogic" style="display: none;">
 		<div class="input-group pull-right" style="display:inline-flex">
