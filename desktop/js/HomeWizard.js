@@ -158,95 +158,9 @@ $('body').on('HomeWizard::includeDevice', function(_event,_options) {
     if (modifyWithoutSave) {
         $('#div_inclusionAlert').showAlert({message: "{{Un périphérique vient d'être inclu. Réactualisation de la page}}", level: 'warning'});
     } else {
-            window.location.reload();
-        /*} else {
-            window.location.href = 'index.php?v=d&p=HomeWizard&m=HomeWizard&id=' + _options;*/
-        
+        window.location.reload();
     }
 });
 
-$('.eqLogicAttr[data-l1key=configuration][data-l2key=paired]').on('change',function(a){
-	var isPaired = this.value;
-	if(isPaired == "true") {$('#bt_Pair').hide();$('#bt_unPair').show();}
-	else {$('#bt_unPair').hide();$('#bt_Pair').show();}
-});
-
-$('.eqLogicAttr[data-l1key=configuration][data-l2key=type]').on('change',function(a){
-	var type = $(this).text();
-	if(type){
-		if(type == "BridgedAccessory") {
-			$('#ipDevice').hide();
-			$('#pinDevice').hide();
-			$('#refreshBT').hide();
-			setTimeout(function(){
-				//console.log('toRemove=',$('.eqLogicAttr[data-l1key=configuration][data-l2key=toRemove]'),$('.eqLogicAttr[data-l1key=configuration][data-l2key=toRemove]').val(),$('.eqLogicAttr[data-l1key=configuration][data-l2key=toRemove]')[0].value);
-				if($('.eqLogicAttr[data-l1key=configuration][data-l2key=toRemove]')[0].value != "1") {
-					$('a[data-action=remove]').hide();
-					$('a[data-action=save]').addClass('roundedRight');
-				} else {
-					$('a[data-action=remove]').show();
-					$('a[data-action=save]').removeClass('roundedRight');
-				}
-			},500);
-			//add save roundedRight
-		}
-		else {
-			//if(type == "Bridge") {
-				$('#refreshBT').show();
-			/*} else {
-				$('#refreshBT').hide();
-			}*/
-			$('#ipDevice').show();
-			$('#pinDevice').show();
-			$('a[data-action=remove]').show();
-			$('a[data-action=save]').removeClass('roundedRight');
-			//remove save roundedRight
-		}
-	}
-});
-
-$('.eqLogicAttr[data-l1key=configuration][data-l2key=pin]').on('focusout',function(a){
-	var pin = this.value;
-	if(pin) {
-		this.value=this.value.replace(/-/g,'');
-		pin=this.value;
-		if (pin.length == 8 && pin.indexOf('-') == -1) {
-			this.value=pin.substring(0,3)+'-'+pin.substring(3,5)+'-'+pin.substring(5,8);
-			pin=this.value;
-		}
-		checkPIN(pin,true);	
-	}
-});
 
 
-function checkPIN(pin,showAlert=false) {
-	if(!pin.match(/^\d\d\d-\d\d-\d\d\d$/)) {
-		if(showAlert) {
-			$('#div_alert').showAlert({
-				message : pin+" : {{Format incorrect (XXX-XX-XXX)}}",
-				level : 'danger'
-			});
-		}
-		return false;
-	}
-	else {
-		if(forbiddenPIN.indexOf(pin) != -1) {
-			if(showAlert) {
-				$('#div_alert').showAlert({
-					message : pin+" : {{Code PIN interdit par Apple}}",
-					level : 'danger'
-				});	
-			}
-			return false;
-		}
-		else {
-			/*if(showAlert) {
-				$('#div_alert').showAlert({
-					message : pin+" : {{Format correct}}",
-					level : 'success'
-				});	
-			}*/
-			return true;
-		}
-	}	
-}
