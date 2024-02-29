@@ -25,11 +25,6 @@ $eqLogics = eqLogic::byType('HomeWizard');
 	<div class="col-xs-12 eqLogicThumbnailDisplay">
 		<legend><i class="fas fa-cog"></i>  {{Gestion}}</legend>
 		<div class="eqLogicThumbnailContainer">
-			<div class="cursor logoPrimary eqLogicAction" data-action="reDiscover" title="{{Redécouvrir les périphériques sur le réseau sans relancer le démon (les forcer à répondre Bonjour)}}">
-				<i class="fas fa-broadcast-tower"></i>
-				<br >
-				<span>{{Redécouvrir}}</span>
-			</div>
 			<div class="cursor logoSecondary eqLogicAction" data-action="gotoPluginConf">
 				<i class="fas fa-wrench"></i>
 				<br />
@@ -89,11 +84,6 @@ $eqLogics = eqLogic::byType('HomeWizard');
 									<div class="col-sm-6">
 										<input type="text" class="eqLogicAttr form-control" data-l1key="id" style="display : none;" />
 										<input type="text" class="eqLogicAttr form-control" data-l1key="name" placeholder="{{Nom de l'équipement}}"/>
-										<input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="pre-paired" style="display : none;" />
-										<input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="paired" style="display : none;" />
-										<input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="typeId" style="display : none;" />
-										<input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="toRemove" style="display : none;" />
-										<input type="text" class="eqLogicAttr form-control" data-l1key="configuration" data-l2key="pairMethod" style="display : none;" />
 										<input type="text" class="eqLogicAttr form-control" data-l1key="logicalId" style="display : none;" />
 									</div>
 								</div>
@@ -135,16 +125,14 @@ $eqLogics = eqLogic::byType('HomeWizard');
 								<div class="form-group" id="ipDevice">
 									<label class="col-sm-4 control-label">{{Adresse Ip}}</label>
 									<div class="col-sm-6">
-										<div class="input-group">
-											<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="address" placeholder="{{Adresse Ip}}" readonly /><span class="input-group-addon">:</i></span><input type="text" class="eqLogicAttr form-control roundedRight" data-l1key="configuration" data-l2key="port" readonly />
-										</div>
+										<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="address" placeholder="{{Adresse Ip}}" readonly />
 									</div>
 								</div>
-								<div class="form-group" id="pinDevice">
-									<label class="col-sm-4 control-label help" data-help="{{Code PIN Homekit (Format : 123-12-123)}}">{{Pin}}</label>
+								<div class="form-group" id="refreshTime">
+									<label class="col-sm-4 control-label help" data-help="{{Temps en secondes entre deux rafraichissements des données (>=1s)}}">{{Rafraîchir}}</label>
 									<div class="col-sm-6">
 										<div class="input-group">
-											<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="pin" placeholder="{{123-12-123}}"/><span class="input-group-addon" id="verif_pairing"><i class="fas fa-question-circle" id="verif_logo"></i></span><a class="btn btn-warning form-control roundedRight" style="display: none;" id="bt_Pair"><i class="far fa-handshake"></i> {{Appairer}}</a><a class="btn btn-warning form-control roundedRight" style="display: none;" id="bt_postPair"><i class="far fa-handshake"></i> {{Post-Appairer}}</a><a class="btn btn-success form-control roundedRight" style="display: none;" id="bt_unPair"><i class="far fa-handshake"></i> {{Désappairer}}</a>
+											<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="refreshTime" placeholder="{{5}}"/><span class="input-group-addon">sec</span>
 										</div>
 									</div>
 								</div>
@@ -155,36 +143,20 @@ $eqLogics = eqLogic::byType('HomeWizard');
 					<div class="col-sm-6">
 						<form class="form-horizontal">
 							<fieldset>
-								<div class="form-group" id="refreshBT">
-									<label class="col-sm-3 control-label">{{Rafraîchir équipements et commandes}}</label>
-									<div class="col-sm-3">
-										<a class="btn btn-success form-control roundedRight" id="bt_refresh"><i class="fas fa-recycle"></i> {{Rafraîchir}}</a>
-									</div>
-								</div>
 								<div class="form-group">
 									<label class="col-sm-3 control-label">{{Type}}</label>
 									<div class="col-sm-3">
 										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="type"></span>
 									</div>
-								</div>
-								<div class="form-group">
-									<label class="col-sm-3 control-label">{{Constructeur}}</label>
+									<label class="col-sm-3 control-label">{{Hostname}}</label>
 									<div class="col-sm-3">
-										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="manufacturer"></span>
-									</div>
-									<label class="col-sm-3 control-label">{{Modèle}}</label>
-									<div class="col-sm-3">
-										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="model"></span>
+										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="hostname"></span>
 									</div>
 								</div>
 								<div class="form-group">
 									<label class="col-sm-3 control-label">{{Numéro de série}}</label>
 									<div class="col-sm-3">
-										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="serial-number"></span>
-									</div>
-									<label class="col-sm-3 control-label">{{Révision Firmware}}</label>
-									<div class="col-sm-3">
-										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="firmware.revision"></span>
+										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="serial"></span>
 									</div>
 								</div>
 							</fieldset>
