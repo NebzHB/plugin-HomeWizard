@@ -11,6 +11,10 @@ const conf={};
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const pollingIntervals={
 	"HWE-P1":5000,
+	"HWE-SKT":5000,
+	"HWE-WTR":5000,
+	"SDM230-wifi":5000,
+	"SDM630-wifi":5000
 };
 
 
@@ -95,10 +99,49 @@ myCommands.stop = function(req, res) {
 	});
 };
 
+myCommands.cmd = function(req, res) {
+	res.type('json');
+
+	Logger.log("Reçu une commande..."+JSON.stringify(req.query),LogType.Debug); 
+	if ('id' in req.query === false) {
+		const error="Pour faire une commande, le démon a besoin de l'id";
+		Logger.log(error,LogType.ERROR); 
+		res.json({'result':'ko','msg':error});
+		return;
+	}
+	if ('cmd' in req.query === false) {
+		const error="Pour faire une commande, le démon a besoin du nom de la commande";
+		Logger.log(error,LogType.ERROR); 
+		res.json({'result':'ko','msg':error});
+		return;
+	}
+
+	try {
+		if(req.query.cmd == 'power_on') {
+			const result=conn[req.query.id].updateState({ power_on: true });
+		} else if(req.query.cmd == 'power_off') {
+			const result=conn[req.query.id].updateState({ power_on: false });
+		} else {
+			const error="Commande "+req.query.cmd+" inconnue !";
+			Logger.log(error,LogType.ERROR); 
+			res.json({'result':'ko','msg':error});
+			return;
+		}
+		
+	} catch (e) {
+		res.json({'result':'ko','error':e});
+		Logger.log("CMD KO : "+JSON.stringify(e, null, 4),LogType.Debug); 
+	}
+
+	Logger.log("CMD OK : "+result,LogType.Debug); 
+	res.json({'result':'ok'});
+}
+
 
 // prepare commands
 app.get('/test', myCommands.test);
 app.get('/stop', myCommands.stop);
+app.get('/cmd',	 myCommands.cmd);
 app.use(function(err, req, res, _next) {
 	res.type('json');
 	Logger.log(err,LogType.ERROR);
@@ -112,42 +155,51 @@ const server = app.listen(conf.serverPort, () => {
 	discovery.start();
 	
 	discovery.on('response', async (mdns) => {
+		const type=mdns.txt.product_type;
 		Logger.log("Découverte de : "+JSON.stringify(mdns, null, 4),LogType.DEBUG);
 		if(mdns.txt.api_enabled == 0) {Logger.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
 
-		const index=mdns.txt.product_type+'_'+mdns.txt.serial;
+		const index=type+'_'+mdns.txt.serial;
 		jsend({eventType: 'createEq', id: index, mdns: mdns});
-		switch(mdns.txt.product_type) {
+		const param={
+			polling: {
+				interval: pollingIntervals[type],
+				stopOnError: false,
+			},
+		};
+		switch(type) {
 			case "HWE-P1": // P1 Meter
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, {
-					polling: {
-						interval: pollingIntervals['HWE-P1'],
-						stopOnError: false,
-					},
-				});
-				conn[index].mdns=mdns;
-				conn[index].polling.getData.start();
-				conn[index].polling.getData.on('response', response => {
+				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+			break;
+			case "HWE-SKT": // Energy Socket
+				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+				conn[index].polling.getState.start();
+				conn[index].polling.getState.on('response', response => {
 					eventReceived(index,response);
 				});
-				conn[index].polling.getData.on('error', error => {
+				conn[index].polling.getState.on('error', error => {
 					Logger.log(error,LogType.ERROR);
 				});
 			break;
-			case "HWE-SKT": // Energy Socket
-			
-			break;
 			case "HWE-WTR": // Watermeter (only on USB)
-			
+				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
 			break;
 			case "SDM230-wifi": // kWh meter (1 phase)
-			
+				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 			case "SDM630-wifi": // kWh meter (3 phases)
-			
+				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 		}
-
+		conn[index].mdns=mdns;
+		conn[index].polling.getData.start();
+		conn[index].polling.getData.on('response', response => {
+			eventReceived(index,response);
+		});
+		conn[index].polling.getData.on('error', error => {
+			Logger.log(error,LogType.ERROR);
+		});
+		
 		/*{
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
