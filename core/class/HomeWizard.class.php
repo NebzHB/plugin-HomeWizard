@@ -299,7 +299,7 @@ class HomeWizard extends eqLogic {
 	}
 
 	public static function nameExists($name,$objectId=null) {
-		$allHK = eqLogic::byObjectId($objectId,true);
+		$allHK = eqLogic::byObjectId($objectId,false);
 		foreach ($allHK as $u) {
 			if ($name == $u->getName()) return true;
 		}
@@ -369,7 +369,7 @@ class HomeWizard extends eqLogic {
 		}
 	}
 	
-	public function pingHost ($host, $timeout = null) {
+	public function pingHost($host, $timeout = null) {
 		$timeoutValue="";
 		if($timeout) {
 			$timeoutValue=" timeout -s 9 --preserve-status --foreground ".$timeout."s ";
@@ -469,8 +469,23 @@ class HomeWizard extends eqLogic {
 		return false;
 	}	
 
-	public function postSave() {
-		
+	public function preSave() {
+		$online=$this->getCmd(null, 'online');
+		if(!is_object($online)) {
+			$cmd=[
+				"name"=>"Online",
+				"logicalId"=>'online',
+				"type"=>"info",
+				"subtype"=>"binary",
+				"display"=> [
+					"generic_type"=>"ONLINE"
+				],
+				"isVisible"=>1,
+				"isHistorized"=>1
+			];
+			$this->createCmd($cmd);
+			$this->pingHost($this->getConfiguration('address'));
+		}
 	}
 }
 
