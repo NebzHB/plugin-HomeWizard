@@ -4,7 +4,7 @@
   "description": "Jeedom Plugin for HoweWizard",
   "main": "resources/HoweWizard.js",
   "scripts": {
-    "lint": "eslint resources\"
+    "lint": "eslint resources/"
   },
   "repository": {
     "type": "git",
