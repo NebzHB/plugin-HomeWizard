@@ -91,12 +91,12 @@ myCommands.cmd = function(req, res) {
 		res.json({'result':'ko','msg':error});
 		return;
 	}
-
+	let result;
 	try {
 		if(req.query.cmd == 'power_on') {
-			const result=conn[req.query.id].updateState({ power_on: true });
+			result=conn[req.query.id].updateState({power_on: true});
 		} else if(req.query.cmd == 'power_off') {
-			const result=conn[req.query.id].updateState({ power_on: false });
+			result=conn[req.query.id].updateState({power_on: false});
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
@@ -111,7 +111,7 @@ myCommands.cmd = function(req, res) {
 
 	Logger.log("CMD OK : "+result,LogType.Debug); 
 	res.json({'result':'ok'});
-}
+};
 
 
 // prepare commands
@@ -149,10 +149,10 @@ const server = app.listen(conf.serverPort, () => {
 			case "HWE-SKT": // Energy Socket
 				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
 				conn[index].polling.getState.start();
-				conn[index].polling.getState.on('response', response => {
+				conn[index].polling.getState.on('response', (response => {
 					eventReceived(index,response);
 				});
-				conn[index].polling.getState.on('error', error => {
+				conn[index].polling.getState.on('error', (error) => {
 					Logger.log(error,LogType.ERROR);
 				});
 			break;
