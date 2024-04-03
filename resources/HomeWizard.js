@@ -14,7 +14,7 @@ const pollingIntervals={
 	"HWE-SKT":5000,
 	"HWE-WTR":5000,
 	"SDM230-wifi":5000,
-	"SDM630-wifi":5000
+	"SDM630-wifi":5000,
 };
 
 
@@ -58,30 +58,6 @@ const discovery = new HW.HomeWizardEnergyDiscovery();
 /* Routing */
 const app = express();
 const myCommands = {};
-myCommands.test = function(req,res) {
-	res.type('json');
-
-	Logger.log("Reçu une demande de test...",LogType.Debug); 
-	let isOK=true;
-	try {
-		for(const c in conn) {
-			if (hasOwnProperty.call(conn,c)) {
-				if(!conn[c].isPolling.getData) {isOK=false;}
-			}
-		}
-	} catch (e) {
-		res.json({'result':'ko','error':e});
-		Logger.log("TEST KO : "+JSON.stringify(e, null, 4),LogType.Debug); 
-	}
-	if(!isOK) {
-		res.json({'result':'ko','error':'no polling on '+c});
-		Logger.log("TEST KO : no polling on "+c,LogType.Debug); 
-	}
-
-	Logger.log("TEST OK",LogType.Debug); 
-	res.json({'result':'ok'});
-};
-
 
 /** Stop the server **/
 myCommands.stop = function(req, res) {
@@ -139,7 +115,6 @@ myCommands.cmd = function(req, res) {
 
 
 // prepare commands
-app.get('/test', myCommands.test);
 app.get('/stop', myCommands.stop);
 app.get('/cmd',	 myCommands.cmd);
 app.use(function(err, req, res, _next) {
