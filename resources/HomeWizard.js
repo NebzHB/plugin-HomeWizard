@@ -168,14 +168,14 @@ const server = app.listen(conf.serverPort, () => {
 		}
 		conn[index].mdns=mdns;
 		conn[index].polling.getData.start();
-		conn[index].polling.getData.on('response', response => {
+		conn[index].polling.getData.on('response', (response) => {
 			eventReceived(index,response);
 		});
-		conn[index].polling.getData.on('error', error => {
+		conn[index].polling.getData.on('error', (error) => {
 			Logger.log(error,LogType.ERROR);
 		});
 		
-		/*{
+		/* {
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
 		  fqdn: 'p1meter-ABABAB._hwenergy._tcp.local',
@@ -186,14 +186,14 @@ const server = app.listen(conf.serverPort, () => {
 			product_type: 'HWE-P1',
 			product_name: 'P1 meter'
 		  }
-		}*/
+		} */
 
 	});
-	discovery.on('error', error => {
-	  Logger.log(error,LogType.ERROR);
+	discovery.on('error', (error) => {
+		Logger.log(error,LogType.ERROR);
 	});
-	discovery.on('warning', error => {
-	  Logger.log(error,LogType.WARNING);
+	discovery.on('warning', (error) => {
+		Logger.log(error,LogType.WARNING);
 	});
 });
 
@@ -222,41 +222,6 @@ Promise.raceAll = function(promises, timeoutTime, timeoutVal) {
         return Promise.race([p, Promise.delay(timeoutTime, timeoutVal)]);
     }));
 };
-
-
-function toBool(val) {
-	if (val == 'false' || val == '0') {
-		return false;
-	} else {
-		return Boolean(val);
-	}
-}
-
-
-// Speed up calls to hasOwnProperty
-function isEmpty(obj) {
-    // null and undefined are 'empty'
-    if (obj == null) {return true;}
-
-    // Assume if it has a length property with a non-zero value
-    // that that property is correct.
-    if (obj.length > 0) {return false;}
-    if (obj.length === 0) {return true;}
-
-    // If it isn't an object at this point
-    // it is empty, but it can't be anything *but* empty
-    // Is it empty?  Depends on your application.
-    if (typeof obj !== 'object') {return true;}
-
-    // Otherwise, does it have any properties of its own?
-    // Note that this doesn't handle
-    // toString and valueOf enumeration bugs in IE < 9
-    for (const key in obj) {
-        if (hasOwnProperty.call(obj, key)) {return false;}
-    }
-
-    return true;
-}
 
 
 process.on('SIGHUP', function() {
