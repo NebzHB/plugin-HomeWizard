@@ -148,18 +148,61 @@ class HomeWizard extends eqLogic {
 	}
 	
 	public static function dependancy_info() {
-		$return = array();
-		$return['progress_file'] = jeedom::getTmpFolder('HomeWizard') . '/dependance';
-		
-		$homewizard_energy_api_folder='resources/node_modules/homewizard-energy-api/package.json';
-		$homewizard_energy_api=dirname(__FILE__).'/../../'.$homewizard_energy_api_folder;
-		
-		$package=json_decode(@file_get_contents($homewizard_energy_api),true);
-		
+		$return = [];
+		$return['log'] = __CLASS__ . '_dep';
+		$return['progress_file'] = jeedom::getTmpFolder(__CLASS__) . '/dependance';
 		$return['state'] = 'nok';
-		if (file_exists($homewizard_energy_api) && version_compare($package['version'],'1.5.0','>=')) {
-			$return['state'] = 'ok';
+
+		// Check if NodeJS exists
+		$nodeJSError=null;
+		$out=null;
+		exec('type node',$out,$nodeJSError);
+		$nodeInstalled=($nodeJSError == 0);
+		if(!$nodeInstalled) {		
+			return $return;
 		}
+
+		// Get package.json
+		$hapControllerRequiredVers = file_get_contents(dirname(__FILE__) . '/../../resources/package.json');
+		$hapControllerRequiredVers = json_decode($hapControllerRequiredVers,true);
+
+		// Check if NodeJS version is greater or equal the required version
+		$nodeVer=trim(shell_exec('node -v'),"v\n\r");
+		if(!$nodeVer) {$nodeVer='';}
+		preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $hapControllerRequiredVers['engines']['node'], $matches);
+		$operator = $matches[1] ?: '==';
+		$specifiedVersion = $matches[2];
+		
+		$nodeVersionOK=version_compare($nodeVer,$specifiedVersion,$operator);
+		if(!$nodeVersionOK) {
+			return $return;
+		}
+
+		// Check if jeedom connect class is present
+		if(!file_exists(dirname(__FILE__) . '/../../resources/utils/jeedom.js')) {
+			return $return;
+		}
+
+		// Check if all dependancies of hap-controller are installed and have the required version
+		foreach($hapControllerRequiredVers['dependencies'] as $dep => $requiredVersionSpec) {
+		    $depPackageJson = file_get_contents(dirname(__FILE__) . '/../../resources/node_modules/' . $dep . '/package.json');
+		    if (!$depPackageJson) {
+		        return $return;
+		    }
+		
+		    $depDetails = json_decode($depPackageJson, true);
+		    $installedVersion = $depDetails['version'];
+		
+		    preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $requiredVersionSpec, $matches);
+		    $requiredOperator = $matches[1] ?: '==';
+		    $requiredVersion = $matches[2];
+		
+		    if (!version_compare($installedVersion, $requiredVersion, $requiredOperator)) {
+		        return $return;
+		    }
+		}
+		
+		$return['state'] = 'ok';
 		return $return;
 	}
 
