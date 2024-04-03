@@ -26,5 +26,7 @@ jobs:
         uses: StephaneBour/actions-php-lint@8.2
         with:
           dir: '.'
+      - name: Install modules
+        run: yarn
       - name: Run ESLint
         run: eslint resources/ --ext .js
