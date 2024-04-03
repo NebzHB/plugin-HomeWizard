@@ -149,7 +149,7 @@ const server = app.listen(conf.serverPort, () => {
 			case "HWE-SKT": // Energy Socket
 				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
 				conn[index].polling.getState.start();
-				conn[index].polling.getState.on('response', (response => {
+				conn[index].polling.getState.on('response', (response) => {
 					eventReceived(index,response);
 				});
 				conn[index].polling.getState.on('error', (error) => {
