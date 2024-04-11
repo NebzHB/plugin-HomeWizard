@@ -7,7 +7,7 @@ PLUGIN=$(basename "$(realpath $BASEDIR/..)")
 TIMED=1
 . ${BASEDIR}/dependance.lib
 ##################################################################
-wget https://raw.githubusercontent.com/NebzHB/nodejs_install/main/install_nodejs.sh -O $BASEDIR/install_nodejs.sh &>/dev/null
+wget https://raw.githubusercontent.com/NebzHB/dependance.lib/master/install_nodejs.sh -O $BASEDIR/install_nodejs.sh &>/dev/null
 
 installVer='18' 	#NodeJS major version to be installed
 
@@ -24,7 +24,7 @@ tryOrStop sudo apt-get update
 try sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libudev-dev
 
 #install nodejs, steps 10->50
-. ${BASEDIR}/install_nodejs.sh ${installVer}
+. ${BASEDIR}/install_nodejs.sh ${installVer} 10 50
 
 step 60 "Nettoyage anciens modules"
 cd ${BASEDIR};
