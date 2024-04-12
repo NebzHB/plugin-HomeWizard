@@ -71,22 +71,6 @@ class HomeWizard extends eqLogic {
 				];
 				self::createEq($eq);
 			break;
-			case 'createEqwithoutEvent':
-				log::add('HomeWizard', 'info', __("Mise à jour de :", __FILE__).json_encode(init('mdns')));
-				$mdns = init('mdns');
-
-				$eq = [
-					"name"=>$mdns['txt']['product_name'],
-					"logicalId"=>$mdns['txt']['product_type'].'_'.$mdns['txt']['serial'],
-					"configuration"=>[
-						"address"=>$mdns['ip'],
-						"hostname"=>$mdns['hostname'],
-						"type"=>$mdns['txt']['product_type'],
-						"serial"=>$mdns['txt']['serial'],
-					]
-				];
-				self::createEq($eq,false);
-			break;
 			case 'updateValue':
 				//log::add('HomeWizard', 'debug', 'updateValue :'.init('id').' '.init('aidiid').' '.init('value'));
 				$logical=init('id');
@@ -133,17 +117,6 @@ class HomeWizard extends eqLogic {
 					}
 				}
 			break;
-			case 'removeEquipment':
-				log::add('HomeWizard', 'info', __("Suppression de l'equipement ", __FILE__) . $macAddress );
-				if (is_object($eqp)) {
-				  //Pour être sur de ne pas perdre l'historique c'est l'utilisateur qui doit supprimer manuellement l'equipements
-				  //On flag tous de même l'equipements
-				  $eqp->setConfiguration('toRemove',1);
-				  $eqp->save(true);
-				  //$eqp->remove();
-				  event::add('HomeWizard::excludeDevice', $eqp->getId());
-				}
-			break;
 		}
 	}
 	
@@ -163,18 +136,30 @@ class HomeWizard extends eqLogic {
 		}
 
 		// Get package.json
-		$hapControllerRequiredVers = file_get_contents(dirname(__FILE__) . '/../../resources/package.json');
-		$hapControllerRequiredVers = json_decode($hapControllerRequiredVers,true);
+		$packageRequiredVers = file_get_contents(dirname(__FILE__) . '/../../resources/package.json');
+		$packageRequiredVers = json_decode($packageRequiredVers,true);
 
 		// Check if NodeJS version is greater or equal the required version
 		$nodeVer=trim(shell_exec('node -v'),"v\n\r");
 		if(!$nodeVer) {$nodeVer='';}
-		preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $hapControllerRequiredVers['engines']['node'], $matches);
-		$operator = $matches[1] ?: '==';
-		$specifiedVersion = $matches[2];
+		preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $packageRequiredVers['engines']['node'], $matches);
+		$nodeOperator = $matches[1] ?: '==';
+		$nodeVersion = $matches[2];
 		
-		$nodeVersionOK=version_compare($nodeVer,$specifiedVersion,$operator);
+		$nodeVersionOK=version_compare($nodeVer,$nodeVersion,$nodeOperator);
 		if(!$nodeVersionOK) {
+			return $return;
+		}
+
+		// Check if NPM version is greater or equal the required version
+		$npmVer=trim(shell_exec('npm -v'),"\n\r");
+		if(!$npmVer) {$npmVer='';}
+		preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $packageRequiredVers['engines']['npm'], $matches);
+		$npmOperator = $matches[1] ?: '==';
+		$npmVersion = $matches[2];
+		
+		$npmVersionOK=version_compare($npmVer,$npmVersion,$npmOperator);
+		if(!$npmVersionOK) {
 			return $return;
 		}
 
@@ -184,7 +169,7 @@ class HomeWizard extends eqLogic {
 		}
 
 		// Check if all dependancies of hap-controller are installed and have the required version
-		foreach($hapControllerRequiredVers['dependencies'] as $dep => $requiredVersionSpec) {
+		foreach($packageRequiredVers['dependencies'] as $dep => $requiredVersionSpec) {
 		    $depPackageJson = file_get_contents(dirname(__FILE__) . '/../../resources/node_modules/' . $dep . '/package.json');
 		    if (!$depPackageJson) {
 		        return $return;
@@ -561,48 +546,14 @@ class HomeWizardCmd extends cmd {
 		}
 
 		switch ($logical) {
-			case 'refresh' :
-				HomeWizard::hwExecute('getAccessories',['id'=>$eqLogical]);
+			case 'power_on' :
+				HomeWizard::hwExecute('power_on',['id'=>$eqLogical]);
 			break;
-			case 'identify':
-				HomeWizard::hwExecute('identify',['id'=>$eqLogical,'char'=>$this->getConfiguration('aidiid')]);
+			case 'power_off':
+				HomeWizard::hwExecute('power_off',['id'=>$eqLogical]);
 			break;
 			default:
-				$subtype=$this->getSubtype();
-				
-				//if message or slider or color
-				if(is_array($_options) && isset($_options[$subtype])) {
-					$val=$_options[$subtype];
-				} else { // if bool
-					$val=$this->getConfiguration('valueToSet');
-				}
-				$aidiids=$this->getConfiguration('aidiid');
-				
-				if(strpos($aidiids,'|') !== false && $subtype=='color') {
-					$aidiids=explode('|',$aidiids);
-					$val=homekitUtils::HTMLtoHS($val);
-					$aidiids=[
-						[$aidiids[0],$val[0]],
-						[$aidiids[1],$val[1]]
-					];
-				} else {
-					$aidiids=[[$aidiids,$val]];
-				}
-				//$params=[];
-				foreach($aidiids as $elmt) {
-					$c=explode('.',$elmt[0]);
-					//array_push($params,
-					$params=[
-						'id'=>$eqLogical,
-						'aid'=>$c[0],
-						'iid'=>$c[1],
-						'val'=>$elmt[1]
-					];
-					log::add('HomeWizard','info',__("Action à envoyer au démon : ", __FILE__).$this->getName().'('.$eqLogical.')('.$elmt[0].')->'.$elmt[1]);
-					HomeWizard::hwExecute('setAccessories',$params);
-				}
-				//log::add('HomeWizard','debug','Action à envoyer au démon : '.$this->getName().'('.$eqLogical.')('.$elmt[0].')->'.$elmt[1].' '.json_encode($params));
-				//HomeWizard::hwExecute('setAccessories',$params);
+
 			break;
 		}
 		//log::add('HomeWizard','debug',$logical);
