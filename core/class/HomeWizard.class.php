@@ -85,9 +85,20 @@ class HomeWizard extends eqLogic {
 							$keyPart=explode('_',$key);
 							$unite='';
 							if(count($keyPart) >2) {
-								$unite = $keyPart[count($keyPart)];
+								$unite = $keyPart[count($keyPart)-1];
 								if($unite=='timestamp') {$unite='';}
-							}	
+								switch($unite) {
+									case 'timestamp':
+										$unite='';
+									break;
+									case 'kwh':
+										$unite="kWh";
+									break;
+									default:
+										$unite=strtoupper($unite);
+									break;
+								}
+							}
 							$cmd=[
 								"name"=>ucfirst($key),
 								"logicalId"=>$key,
