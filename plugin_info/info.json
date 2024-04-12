@@ -5,7 +5,7 @@
 		"fr_FR":"Ce plugin permet d'afficher les données des périphériques HomeWizard Energy",
 		"en_US":"This plugin allow you to display data from HomeWizard Energy devices"
 	},
-	"utilization" : "ATTENTION : Non supporté : Jessie & Docker & Jeedom Mini+ & Raspberry Pi 1-2 & Raspberry Zéro (armv6) & i386 (32bits)\n\n",
+	"utilization" : "ATTENTION : Non supporté : Jessie & Stretch & Docker & Jeedom Mini+ & Raspberry Pi 1-2 & Raspberry Zéro (armv6) & i386 (32bits)\n\n",
 	"licence" : "AGPL",
 	"author" : "Nebz",
 	"hasDependency" : true,
