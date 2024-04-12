@@ -128,14 +128,6 @@ $eqLogics = eqLogic::byType('HomeWizard');
 										<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="address" placeholder="{{Adresse Ip}}" readonly />
 									</div>
 								</div>
-								<div class="form-group" id="refreshTime">
-									<label class="col-sm-4 control-label help" data-help="{{Temps en secondes entre deux rafraichissements des données (>=1s)}}">{{Rafraîchir}}</label>
-									<div class="col-sm-6">
-										<div class="input-group">
-											<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="refreshTime" placeholder="{{5}}"/><span class="input-group-addon">sec</span>
-										</div>
-									</div>
-								</div>
 							</fieldset>
 						</form>
 					</div>
