@@ -301,23 +301,32 @@ class HomeWizard extends eqLogic {
 	public static function deamon_stop() {
 		log::add('HomeWizard', 'info', __("Arrêt du démon HomeWizard", __FILE__));
 		$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
-		//@file_get_contents($url);
 		$request_http = new com_http($url);
 		$request_http->setNoReportError(true);
 		$request_http->exec(11,1);
-		sleep(5);
-		
-		$pid = exec("ps -eo pid,command | grep 'resources/HomeWizard.js' | grep -v grep | awk '{print $1}'");
-		if($pid) {
-			exec('echo '.$pid.' | xargs '.system::getCmdSudo().'kill > /dev/null 2>&1');
-			log::add('HomeWizard', 'info', __("Arrêt SIGHUP du démon HomeWizard", __FILE__));
-			sleep(3);
+		for ($retry = 0; $retry < 5; $retry++) {
+			if (self::deamon_info()['state'] != 'ok') { 
+				return true;
+			}
+			sleep(1);
 		}
 		
-		$pid = exec("ps -eo pid,command | grep 'resources/HomeWizard.js' | grep -v grep | awk '{print $1}'");
+		$pid = exec("pgrep -f 'resources/HomeWizard.js'");
 		if($pid) {
-			exec('echo '.$pid.' | xargs '.system::getCmdSudo().'kill -9 > /dev/null 2>&1');
-			log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+			exec(system::getCmdSudo().'kill -15 ' . $pid.' > /dev/null 2>&1');
+			log::add('hkControl', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+			for ($retry = 0; $retry < 3; $retry++) {
+				if (self::deamon_info()['state'] != 'ok') { 
+					return true;
+				}
+				sleep(1);
+			}
+		}
+		
+		$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+		if($pid) {
+			exec(system::getCmdSudo().'kill -9 ' . $pid.' > /dev/null 2>&1');
+			log::add('hkControl', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
 		}
 	}	
 	
