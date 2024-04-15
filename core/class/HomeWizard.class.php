@@ -225,8 +225,7 @@ class HomeWizard extends eqLogic {
 		return $return;
 	}
 	
-	public static function reinstallNodeJS()
-	{ // Reinstall NODEJS from scratch (to use if there is errors in dependancy install)
+	public static function reinstallNodeJS() { // Reinstall NODEJS from scratch (to use if there is errors in dependancy install)
 		$pluginHomeWizard = plugin::byId('HomeWizard');
 		log::add('HomeWizard', 'info', __("Suppression du Code NodeJS", __FILE__));
 		$cmd = system::getCmdSudo() . 'rm -rf ' . dirname(__FILE__) . '/../../resources/node_modules &>/dev/null';
