@@ -299,34 +299,37 @@ class HomeWizard extends eqLogic {
 	}
 
 	public static function deamon_stop() {
-		log::add('HomeWizard', 'info', __("Arrêt du démon HomeWizard", __FILE__));
-		$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
-		$request_http = new com_http($url);
-		$request_http->setNoReportError(true);
-		$request_http->exec(11,1);
-		for ($retry = 0; $retry < 5; $retry++) {
-			if (self::deamon_info()['state'] != 'ok') { 
-				return true;
-			}
-			sleep(1);
-		}
-		
-		$pid = exec("pgrep -f 'resources/HomeWizard.js'");
-		if($pid) {
-			exec(system::getCmdSudo().'kill -15 ' . $pid.' > /dev/null 2>&1');
-			log::add('hkControl', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
-			for ($retry = 0; $retry < 3; $retry++) {
+		$deamon_info = self::deamon_info();
+		if ($deamon_info['state'] == 'ok') {
+			log::add('HomeWizard', 'info', __("Arrêt du démon HomeWizard", __FILE__));
+			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
+			$request_http = new com_http($url);
+			$request_http->setNoReportError(true);
+			$request_http->exec(11,1);
+			for ($retry = 0; $retry < 5; $retry++) {
 				if (self::deamon_info()['state'] != 'ok') { 
 					return true;
 				}
 				sleep(1);
 			}
-		}
-		
-		$pid = exec("pgrep -f 'resources/HomeWizard.js'");
-		if($pid) {
-			exec(system::getCmdSudo().'kill -9 ' . $pid.' > /dev/null 2>&1');
-			log::add('hkControl', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
+			
+			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+			if($pid) {
+				exec(system::getCmdSudo().'kill -15 ' . $pid.' > /dev/null 2>&1');
+				log::add('hkControl', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+				for ($retry = 0; $retry < 3; $retry++) {
+					if (self::deamon_info()['state'] != 'ok') { 
+						return true;
+					}
+					sleep(1);
+				}
+			}
+			
+			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+			if($pid) {
+				exec(system::getCmdSudo().'kill -9 ' . $pid.' > /dev/null 2>&1');
+				log::add('hkControl', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
+			}
 		}
 	}	
 	
