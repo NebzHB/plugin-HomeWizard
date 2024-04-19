@@ -535,6 +535,26 @@ class HomeWizard extends eqLogic {
 			$this->createCmd($cmd);
 			$this->pingHost($this->getConfiguration('address'));
 		}
+		
+		$type = $this->getType();
+		$eqConfig = 'plugins/HomeWizard/core/config/'.$type.'.json';
+		$base = dirname(__FILE__) . '/../../../../';
+		if(file_exists($base.$eqConfig)) {
+			$extraConfig=json_decode(file_get_contents($base.$eqConfig),true);
+		}
+		if($extraConfig) {
+			foreach($extraConfig['modifyCommands'] as $cmdModif) {
+				$this->createCmd($cmdConfig);
+			}
+
+			foreach($extraConfig['additionnalCommands'] as $cmdConfig) {
+				$cmdToCreate=$this->getCmd(null, $cmdConfig['logicalId']);
+				if(!is_object($cmdToCreate)) {
+					$this->createCmd($cmdConfig);
+				}
+			}
+		}
+
 	}
 }
 
