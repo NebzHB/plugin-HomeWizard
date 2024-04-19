@@ -1,0 +1,26 @@
+{
+	"additionnalCommands": [
+		{
+			"name": "{{Allumer}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "SWITCH_ON"
+			},
+			"value": "power_on",
+			"isVisible": 1,
+			"logicalId": "action_power_on"
+		},
+    {
+			"name": "{{Eteindre}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "SWITCH_OFF"
+			},
+			"value": "power_on",
+			"isVisible": 1,
+			"logicalId": "action_power_off"
+		}
+	]
+}
