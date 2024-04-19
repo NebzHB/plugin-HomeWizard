@@ -147,7 +147,7 @@ const server = app.listen(conf.serverPort, () => {
 				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 			case "HWE-SKT": // Energy Socket
-				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, {polling: {interval: 1000, stopOnError: false}});
 				conn[index].polling.getState.start();
 				conn[index].polling.getState.on('response', (response) => {
 					eventReceived(index,response);
