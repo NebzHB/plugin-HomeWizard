@@ -567,11 +567,20 @@ class HomeWizardCmd extends cmd {
 		}
 
 		switch ($logical) {
-			case 'power_on' :
+			case 'action_power_on' :
 				HomeWizard::hwExecute('power_on',['id'=>$eqLogical]);
 			break;
-			case 'power_off':
+			case 'action_power_off':
 				HomeWizard::hwExecute('power_off',['id'=>$eqLogical]);
+			break;
+			case 'action_lock' :
+				HomeWizard::hwExecute('lock',['id'=>$eqLogical]);
+			break;
+			case 'action_unlock':
+				HomeWizard::hwExecute('unlock',['id'=>$eqLogical]);
+			break;
+			case 'action_brightness' :
+				HomeWizard::hwExecute('brightness',['id'=>$eqLogical,'val'=>$_options['slider']]);
 			break;
 			default:
 
