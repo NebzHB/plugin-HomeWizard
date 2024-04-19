@@ -97,6 +97,12 @@ myCommands.cmd = function(req, res) {
 			result=conn[req.query.id].updateState({power_on: true});
 		} else if(req.query.cmd == 'power_off') {
 			result=conn[req.query.id].updateState({power_on: false});
+		} else if(req.query.cmd == 'lock') {
+			result=conn[req.query.id].updateState({switch_lock: true});
+		} else if(req.query.cmd == 'unlock') {
+			result=conn[req.query.id].updateState({switch_lock: false});
+		} else if(req.query.cmd == 'brightness') {
+			result=conn[req.query.id].updateState({brightness: req.query.val});
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
