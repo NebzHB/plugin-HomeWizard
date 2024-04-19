@@ -1,4 +1,17 @@
-{
+{	"modifyCommands": [
+		{
+			"logicalId": "power_on",
+			"display": {
+				"generic_type": "SWITCH_STATE"
+			},
+		},
+		{
+			"logicalId": "switch_lock",
+			"display": {
+				"generic_type": "SWITCH_STATE"
+			},
+		},
+	],
 	"additionnalCommands": [
 		{
 			"name": "{{Allumer}}",
