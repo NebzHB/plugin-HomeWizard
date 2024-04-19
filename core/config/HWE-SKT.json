@@ -11,7 +11,7 @@
 			"isVisible": 1,
 			"logicalId": "action_power_on"
 		},
-    {
+    		{
 			"name": "{{Eteindre}}",
 			"type": "action",
 			"subtype": "other",
@@ -21,6 +21,35 @@
 			"value": "power_on",
 			"isVisible": 1,
 			"logicalId": "action_power_off"
+		},
+		{
+			"name": "{{Verrouiller}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "SWITCH_ON"
+			},
+			"value": "switch_lock",
+			"isVisible": 1,
+			"logicalId": "action_lock"
+		},
+    		{
+			"name": "{{Déverrouiller}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "SWITCH_OFF"
+			},
+			"value": "switch_lock",
+			"isVisible": 1,
+			"logicalId": "action_unlock"
+		},
+		{
+			"name": "{{Luminosité Anneau}}",
+			"type": "action",
+			"subtype": "slider",
+			"isVisible": 1,
+			"logicalId": "action_brightness"
 		}
 	]
 }
