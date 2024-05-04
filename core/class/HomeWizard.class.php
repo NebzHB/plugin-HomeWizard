@@ -32,19 +32,19 @@ class HomeWizard extends eqLogic {
 		}
 	}
 
-	public static function event() {
+	public static function event($data) {
 		$changed=false;
-		$eventType = init('eventType');
+		$eventType = $data['eventType'];
 		log::add('HomeWizard', 'debug', __("Passage dans la fonction event ", __FILE__) . $eventType);
 		if ($eventType == 'error'){
-			log::add('HomeWizard', 'error', init('description'));
+			log::add('HomeWizard', 'error', $data['description']);
 			return;
 		}
 		
 		switch ($eventType) {
 			case 'createEq':
-				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode(init('mdns')));
-				$mdns = init('mdns');
+				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode($data['mdns']));
+				$mdns = $data['mdns'];
 				/*{
 				  ip: '192.168.1.100',
 				  hostname: 'p1meter-ABABAB.local',
@@ -72,11 +72,10 @@ class HomeWizard extends eqLogic {
 				self::createEq($eq);
 			break;
 			case 'updateValue':
-				//log::add('HomeWizard', 'debug', 'updateValue :'.init('id').' '.init('aidiid').' '.init('value'));
-				$logical=init('id');
+				$logical=$data['id'];
 				$eqp = eqlogic::byLogicalId($logical,'HomeWizard');
 				if (is_object($eqp)){
-					$val=init('value');
+					$val=$data['value'];
 					log::add('HomeWizard','debug',json_encode($val));
 					$hasNewCmd=false;
 					foreach($val as $key=>$value) {
@@ -118,7 +117,7 @@ class HomeWizard extends eqLogic {
 				}
 			break;
 			case 'doPing':
-				$eqp = eqlogic::byLogicalId(init('id'),'HomeWizard');
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getIsEnable() == 1){
 					if ($eqp->pingHost($eqp->getConfiguration('address')) == false) {
 						log::add('HomeWizard', 'debug', __("Offline Réseau : ", __FILE__) . $eqp->getName());
