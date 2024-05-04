@@ -51,6 +51,7 @@ for(const name in conf) {
 
 
 const conn = {};
+const intervals = {};
 // prepare callback for discovery
 const discovery = new HW.HomeWizardEnergyDiscovery();
 
@@ -130,6 +131,14 @@ app.use(function(err, req, res, _next) {
 });
 
 
+function startStateInterval(index) {
+    intervals[index] = setInterval(async () => {
+      const state = await conn[index].getState();
+      eventReceived(index,state);
+    }, 1000);
+}
+
+
 /** Listen **/
 const server = app.listen(conf.serverPort, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
@@ -153,14 +162,8 @@ const server = app.listen(conf.serverPort, () => {
 				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 			case "HWE-SKT": // Energy Socket
-				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, {polling: {interval: 1000, stopOnError: false}});
-				conn[index].polling.getState.start();
-				conn[index].polling.getState.on('response', (response) => {
-					eventReceived(index,response);
-				});
-				conn[index].polling.getState.on('error', (error) => {
-					Logger.log(error,LogType.ERROR);
-				});
+				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+            			startStateInterval(index);
 			break;
 			case "HWE-WTR": // Watermeter (only on USB)
 				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
@@ -175,12 +178,12 @@ const server = app.listen(conf.serverPort, () => {
 		conn[index].mdns=mdns;
 		conn[index].polling.getData.start();
 		conn[index].polling.getData.on('response', (response) => {
-			eventReceived(index,response);
+		  eventReceived(index,response);
 		});
 		conn[index].polling.getData.on('error', (error) => {
-			Logger.log(error,LogType.ERROR);
+		  Logger.log(error,LogType.ERROR);
 		});
-		
+
 		/* {
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
