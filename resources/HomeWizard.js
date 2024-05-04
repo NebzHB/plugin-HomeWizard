@@ -38,7 +38,7 @@ process.argv.forEach(function(val, index) {
 });
 
 
-const jsend = require('./utils/jeedom.js')('HomeWizard',conf.urlJeedom,conf.apiKey,conf.logLevel);
+const jsend = require('./utils/jeedom.js')('HomeWizard',conf.urlJeedom,conf.apiKey,conf.logLevel,'jsonrpc');
 
 
 // display starting
