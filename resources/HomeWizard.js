@@ -163,7 +163,7 @@ const server = app.listen(conf.serverPort, () => {
 			break;
 			case "HWE-SKT": // Energy Socket
 				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
-            			startStateInterval(index);
+				startStateInterval(index);
 			break;
 			case "HWE-WTR": // Watermeter (only on USB)
 				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
@@ -178,10 +178,10 @@ const server = app.listen(conf.serverPort, () => {
 		conn[index].mdns=mdns;
 		conn[index].polling.getData.start();
 		conn[index].polling.getData.on('response', (response) => {
-		  eventReceived(index,response);
+			eventReceived(index,response);
 		});
 		conn[index].polling.getData.on('error', (error) => {
-		  Logger.log(error,LogType.ERROR);
+			Logger.log(error,LogType.ERROR);
 		});
 
 		/* {
