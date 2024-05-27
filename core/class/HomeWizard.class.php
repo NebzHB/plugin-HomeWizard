@@ -144,6 +144,12 @@ class HomeWizard extends eqLogic {
 			return $return;
 		}
 
+		// Don't check anything more if buster to avoid dep reinstall and blocking users
+		if(trim(shell_exec("lsb_release -c -s")) == "buster") {
+			$return['state'] = 'ok';
+			return $return;
+		}
+
 		// Get package.json
 		$packageRequiredVers = file_get_contents(dirname(__FILE__) . '/../../resources/package.json');
 		$packageRequiredVers = json_decode($packageRequiredVers,true);
