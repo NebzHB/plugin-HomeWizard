@@ -145,7 +145,7 @@ class HomeWizard extends eqLogic {
 		}
 
 		// Don't check anything more if buster to avoid dep reinstall and blocking users
-		if(trim(shell_exec("lsb_release -c -s")) == "buster") {
+		if(trim(shell_exec("lsb_release -c -s")) == "buster" && strtotime(date("Y-m-d")) > strtotime("2024-06-30")) {
 			$return['state'] = 'ok';
 			return $return;
 		}
