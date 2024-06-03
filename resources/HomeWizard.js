@@ -136,13 +136,14 @@ function startStateInterval(index) {
 		try {
 			const state = await conn[index].getState();
 			eventReceived(index,state);
-		} catch(e) {
-			if(e.toString().includes("HeadersTimeoutError") || e.toString().includes("ConnectTimeoutError")) {
-				Logger.log(index+' (getState) : Injoignable ('+e+')',LogType.ERROR);
+		} catch(error) {
+			if(error.toString().includes("TimeoutError")) {
+				Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
 			} else {
-				Logger.log(index+' (getState) : '+e,LogType.ERROR);
+				Logger.log(index+' (getState) : '+error,LogType.ERROR);
 			}
 			clearInterval(intervals[index]);
+			delete intervals[index];
 		}
     }, 1000);
 }
@@ -193,14 +194,17 @@ const server = app.listen(conf.serverPort, () => {
 			eventReceived(index,response);
 		});
 		conn[index].polling.getData.on('error', (error) => {
-			if(error.toString().includes("HeadersTimeoutError") || error.toString().includes("ConnectTimeoutError")) {
-				Logger.log(index+' (getData) : Injoignable ('+error+')',LogType.ERROR);
+			if(error.toString().includes("TimeoutError")) {
+				Logger.log(index+' (getData) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
 			} else {
 				Logger.log(index+' (getData) : '+error,LogType.ERROR);
 			}
-			conn[index].polling.getData.stop();
-			discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
-			jsend({eventType: 'doPing', id: index});
+			try {
+				conn[index].polling.getData.stop();
+				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
+				jsend({eventType: 'doPing', id: index});
+				delete conn[index];
+			} catch(e){}
 		});
 
 		/* {
