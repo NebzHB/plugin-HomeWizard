@@ -483,7 +483,9 @@ class HomeWizard extends eqLogic {
 		if(isset($cmd['unite'])) {
 			$newCmd->setUnite( $cmd['unite'] );
 		}
-		$newCmd->setType($cmd['type']);
+		if(isset($cmd['type'])) {
+			$newCmd->setType($cmd['type']);
+		}
 		if(isset($cmd['configuration'])) {
 			foreach($cmd['configuration'] as $configuration_type=>$configuration_value) {
 				$newCmd->setConfiguration($configuration_type, $configuration_value);
@@ -500,7 +502,9 @@ class HomeWizard extends eqLogic {
 				$newCmd->setDisplay($display_type, $display_value);
 			}
 		}
-		$newCmd->setSubType($cmd['subtype']);
+		if(isset($cmd['subtype'])) {
+			$newCmd->setSubType($cmd['subtype']);
+		}
 		if($cmd['type'] == 'action' && isset($cmd['value'])) {
 			$linkStatus = $this->getCmd(null, $cmd['value']);
 			if(is_object($linkStatus))
@@ -537,19 +541,22 @@ class HomeWizard extends eqLogic {
 				"isVisible"=>1,
 				"isHistorized"=>1
 			];
-			$this->createCmd($cmd);
-			$this->pingHost($this->getConfiguration('address'));
+			$this->createCmd($cmd);	
 		}
-		
-		$type = $this->getType();
+		$this->pingHost($this->getConfiguration('address'));
+
+		$type = $this->getConfiguration('type');
 		$eqConfig = 'plugins/HomeWizard/core/config/'.$type.'.json';
 		$base = dirname(__FILE__) . '/../../../../';
 		if(file_exists($base.$eqConfig)) {
-			$extraConfig=json_decode(file_get_contents($base.$eqConfig),true);
-		}
-		if($extraConfig) {
+			$content = file_get_contents($base.$eqConfig);
+			if($content) {
+				$content=translate::exec($content,realpath($base.$eqConfig));
+			}
+			$extraConfig=json_decode($content,true);
 			foreach($extraConfig['modifyCommands'] as $cmdModif) {
-				$this->createCmd($cmdConfig);
+				log::add('HomeWizard','info',"modifyCommands !".json_encode($cmdModif));
+				$this->createCmd($cmdModif);
 			}
 
 			foreach($extraConfig['additionnalCommands'] as $cmdConfig) {
@@ -559,7 +566,6 @@ class HomeWizard extends eqLogic {
 				}
 			}
 		}
-
 	}
 }
 
