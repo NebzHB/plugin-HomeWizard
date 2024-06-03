@@ -1,23 +1,32 @@
 {	"modifyCommands": [
 		{
 			"logicalId": "power_on",
-			"name": "Power_on",
 			"display": {
 				"generic_type": "ENERGY_STATE"
 			}
 		},
 		{
 			"logicalId": "switch_lock",
-			"name": "Switch_lock",
 			"display": {
 				"generic_type": "SWITCH_STATE"
 			}
 		},
 		{
 			"logicalId": "brightness",
-			"name": "Brightness",
 			"display": {
 				"generic_type": "LIGHT_STATE"
+			}
+		},
+		{
+			"logicalId": "active_power_w",
+			"display": {
+				"generic_type": "POWER"
+			}
+		},
+		{
+			"logicalId": "total_power_import_kwh",
+			"display": {
+				"generic_type": "CONSUMPTION"
 			}
 		}
 	],
