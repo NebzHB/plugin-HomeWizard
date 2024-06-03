@@ -201,6 +201,10 @@ const server = app.listen(conf.serverPort, () => {
 			}
 			try {
 				conn[index].polling.getData.stop();
+				if(intervals[index]) {
+					clearInterval(intervals[index]);
+					delete intervals[index];
+				}
 				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
 				jsend({eventType: 'doPing', id: index});
 				delete conn[index];
