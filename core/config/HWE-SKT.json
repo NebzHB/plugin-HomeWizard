@@ -1,16 +1,18 @@
 {	"modifyCommands": [
 		{
 			"logicalId": "power_on",
+			"name": "Power_on",
 			"display": {
 				"generic_type": "SWITCH_STATE"
-			},
+			}
 		},
 		{
 			"logicalId": "switch_lock",
+			"name": "Switch_lock",
 			"display": {
 				"generic_type": "SWITCH_STATE"
-			},
-		},
+			}
+		}
 	],
 	"additionnalCommands": [
 		{
@@ -24,7 +26,7 @@
 			"isVisible": 1,
 			"logicalId": "action_power_on"
 		},
-    		{
+    	{
 			"name": "{{Eteindre}}",
 			"type": "action",
 			"subtype": "other",
