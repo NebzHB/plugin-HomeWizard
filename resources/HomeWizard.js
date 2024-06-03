@@ -104,6 +104,8 @@ myCommands.cmd = function(req, res) {
 			result=conn[req.query.id].updateState({switch_lock: false});
 		} else if(req.query.cmd == 'brightness') {
 			result=conn[req.query.id].updateState({brightness: parseInt(req.query.val)});
+		} else if(req.query.cmd == 'identify') {
+			result=conn[req.query.id].identify();
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
