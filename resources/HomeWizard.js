@@ -165,10 +165,10 @@ const server = app.listen(conf.serverPort, () => {
 			polling: {
 				interval: pollingIntervals[type],
 				stopOnError: false,
-			}/*,
-			logger: {
+			},
+			/* logger: {
 				method: console.log
-			}*/
+			} */
 		};
 		switch(type) {
 			case "HWE-P1": // P1 Meter
@@ -208,7 +208,9 @@ const server = app.listen(conf.serverPort, () => {
 				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
 				jsend({eventType: 'doPing', id: index});
 				delete conn[index];
-			} catch(e){}
+			} catch(e){
+				// Don't need to do anything
+			}
 		});
 
 		/* {
