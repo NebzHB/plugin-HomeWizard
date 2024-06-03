@@ -3,7 +3,7 @@
 			"logicalId": "power_on",
 			"name": "Power_on",
 			"display": {
-				"generic_type": "SWITCH_STATE"
+				"generic_type": "ENERGY_STATE"
 			}
 		},
 		{
@@ -11,6 +11,13 @@
 			"name": "Switch_lock",
 			"display": {
 				"generic_type": "SWITCH_STATE"
+			}
+		},
+		{
+			"logicalId": "brightness",
+			"name": "Brightness",
+			"display": {
+				"generic_type": "LIGHT_STATE"
 			}
 		}
 	],
@@ -20,7 +27,7 @@
 			"type": "action",
 			"subtype": "other",
 			"display": {
-				"generic_type": "SWITCH_ON"
+				"generic_type": "ENERGY_ON"
 			},
 			"value": "power_on",
 			"isVisible": 1,
@@ -31,7 +38,7 @@
 			"type": "action",
 			"subtype": "other",
 			"display": {
-				"generic_type": "SWITCH_OFF"
+				"generic_type": "ENERGY_OFF"
 			},
 			"value": "power_on",
 			"isVisible": 1,
@@ -65,6 +72,9 @@
 			"subtype": "slider",
 			"isVisible": 1,
 			"logicalId": "action_brightness",
+			"display": {
+				"generic_type": "LIGHT_SLIDER"
+			},
 			"configuration": {
 				"minValue":0,
 				"maxValue":255
