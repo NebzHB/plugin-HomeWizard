@@ -200,7 +200,7 @@ const server = app.listen(conf.serverPort, () => {
 			}
 			conn[index].polling.getData.stop();
 			discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
-			//jsend({eventType: 'doPing', id: index}); //not working... getting ECONNABORTED
+			jsend({eventType: 'doPing', id: index});
 		});
 
 		/* {
