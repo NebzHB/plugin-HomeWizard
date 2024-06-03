@@ -103,7 +103,7 @@ myCommands.cmd = function(req, res) {
 		} else if(req.query.cmd == 'unlock') {
 			result=conn[req.query.id].updateState({switch_lock: false});
 		} else if(req.query.cmd == 'brightness') {
-			result=conn[req.query.id].updateState({brightness: req.query.val});
+			result=conn[req.query.id].updateState({brightness: parseInt(req.query.val)});
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
@@ -113,10 +113,10 @@ myCommands.cmd = function(req, res) {
 		
 	} catch (e) {
 		res.json({'result':'ko','error':e});
-		Logger.log("CMD KO : "+JSON.stringify(e, null, 4),LogType.Debug); 
+		console.error("CMD KO : ",e);
 	}
 
-	Logger.log("CMD OK : "+result,LogType.Debug); 
+	Logger.log("CMD OK : "+JSON.stringify(result, null, 4),LogType.Debug); 
 	res.json({'result':'ok'});
 };
 
