@@ -555,7 +555,6 @@ class HomeWizard extends eqLogic {
 			}
 			$extraConfig=json_decode($content,true);
 			foreach($extraConfig['modifyCommands'] as $cmdModif) {
-				log::add('HomeWizard','info',"modifyCommands !".json_encode($cmdModif));
 				$this->createCmd($cmdModif);
 			}
 
@@ -586,10 +585,7 @@ class HomeWizardCmd extends cmd {
 		$result=null;
 
 		$eqLogical=$eqLogic->getLogicalId();
-		$partLogical=explode('_',$eqLogical);
-		if(isset($partLogical[1])) {
-			$eqLogical=$partLogical[0];
-		}
+
 		
 		$daemonState=HomeWizard::deamon_info();
 		if($daemonState['state'] != 'ok') {
@@ -599,19 +595,19 @@ class HomeWizardCmd extends cmd {
 
 		switch ($logical) {
 			case 'action_power_on' :
-				HomeWizard::hwExecute('power_on',['id'=>$eqLogical]);
+				HomeWizard::hwExecute('cmd',['cmd'=>'power_on','id'=>$eqLogical]);
 			break;
 			case 'action_power_off':
-				HomeWizard::hwExecute('power_off',['id'=>$eqLogical]);
+				HomeWizard::hwExecute('cmd',['cmd'=>'power_off','id'=>$eqLogical]);
 			break;
 			case 'action_lock' :
-				HomeWizard::hwExecute('lock',['id'=>$eqLogical]);
+				HomeWizard::hwExecute('cmd',['cmd'=>'lock','id'=>$eqLogical]);
 			break;
 			case 'action_unlock':
-				HomeWizard::hwExecute('unlock',['id'=>$eqLogical]);
+				HomeWizard::hwExecute('cmd',['cmd'=>'unlock','id'=>$eqLogical]);
 			break;
 			case 'action_brightness' :
-				HomeWizard::hwExecute('brightness',['id'=>$eqLogical,'val'=>$_options['slider']]);
+				HomeWizard::hwExecute('cmd',['cmd'=>'brightness','id'=>$eqLogical,'val'=>$_options['slider']]);
 			break;
 			default:
 
