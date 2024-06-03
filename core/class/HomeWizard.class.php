@@ -111,7 +111,7 @@ class HomeWizard extends eqLogic {
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
-					if($hasNewCmd) $eqp->save(true);
+					if($hasNewCmd) $eqp->save();
 				} else {
 					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id = ", __FILE__).$logical);
 				}
@@ -527,7 +527,7 @@ class HomeWizard extends eqLogic {
 		return false;
 	}	
 
-	public function preSave() {
+	public function postSave() {
 		$online=$this->getCmd(null, 'online');
 		if(!is_object($online)) {
 			$cmd=[
@@ -555,7 +555,10 @@ class HomeWizard extends eqLogic {
 			}
 			$extraConfig=json_decode($content,true);
 			foreach($extraConfig['modifyCommands'] as $cmdModif) {
-				$this->createCmd($cmdModif);
+				$existCmd = $this->getCmd(null, $cmdModif['logicalId']);
+				if (is_object($existCmd)) {
+					$this->createCmd($cmdModif);
+				}
 			}
 
 			foreach($extraConfig['additionnalCommands'] as $cmdConfig) {
