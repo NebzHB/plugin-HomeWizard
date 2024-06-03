@@ -484,7 +484,7 @@ class HomeWizard extends eqLogic {
 			$newCmd->setName(__($cmd['name'], __FILE__));
 			$newCmd->setEqLogic_id($this->getId());
 		} else {
-			log::add('HomeWizard','debug',__("Modification commande ", __FILE__).$cmd['name']);
+			log::add('HomeWizard','debug',__("Modification commande ", __FILE__).(($cmd['name'])?$cmd['name']:$cmd['logicalId']));
 		}
 		if(isset($cmd['unite'])) {
 			$newCmd->setUnite( $cmd['unite'] );
