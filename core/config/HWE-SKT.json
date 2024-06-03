@@ -64,7 +64,11 @@
 			"type": "action",
 			"subtype": "slider",
 			"isVisible": 1,
-			"logicalId": "action_brightness"
+			"logicalId": "action_brightness",
+			"configuration": {
+				"minValue":0,
+				"maxValue":255
+			}
 		}
 	]
 }
