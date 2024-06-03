@@ -79,6 +79,14 @@
 				"minValue":0,
 				"maxValue":255
 			}
+		},
+		{
+			"name": "{{Identifier}}",
+			"type": "action",
+			"subtype": "other",
+			"value": "",
+			"isVisible": 1,
+			"logicalId": "action_identify"
 		}
 	]
 }
