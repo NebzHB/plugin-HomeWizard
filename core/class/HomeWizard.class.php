@@ -389,7 +389,7 @@ class HomeWizard extends eqLogic {
 				foreach($eq['configuration'] as $c => $v) {
 					$eqp->setConfiguration($c, $v);
 				}
-				$eqp->save(true);
+				$eqp->save();
 			} else {
 				log::add('HomeWizard', 'warning', __("Etrange l'équipement ", __FILE__) . $eq['name'] .'('. $eq['logicalId'] . __(") n'a pas de nom... vérifiez qu'il est bien appairé : ", __FILE__).json_encode($eq));
 			}
@@ -611,6 +611,9 @@ class HomeWizardCmd extends cmd {
 			break;
 			case 'action_brightness' :
 				HomeWizard::hwExecute('cmd',['cmd'=>'brightness','id'=>$eqLogical,'val'=>$_options['slider']]);
+			break;
+			case 'action_identify' :
+				HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
 			break;
 			default:
 
