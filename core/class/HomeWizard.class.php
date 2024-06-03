@@ -58,7 +58,7 @@ class HomeWizard extends eqLogic {
 				  }
 				}*/
 				$eq = [
-					"name"=>$mdns['txt']['product_name'],
+					"name"=>$mdns['txt']['product_name'].'_'.$mdns['txt']['serial'],
 					"logicalId"=>$mdns['txt']['product_type'].'_'.$mdns['txt']['serial'],
 					"enable"=>1,
 					"visible"=>1,
