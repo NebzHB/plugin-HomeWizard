@@ -133,8 +133,17 @@ app.use(function(err, req, res, _next) {
 
 function startStateInterval(index) {
     intervals[index] = setInterval(async () => {
-      const state = await conn[index].getState();
-      eventReceived(index,state);
+		try {
+			const state = await conn[index].getState();
+			eventReceived(index,state);
+		} catch(e) {
+			if(e.toString().includes("HeadersTimeoutError") || e.toString().includes("ConnectTimeoutError")) {
+				Logger.log(index+' (getState) : Injoignable ('+e+')',LogType.ERROR);
+			} else {
+				Logger.log(index+' (getState) : '+e,LogType.ERROR);
+			}
+			clearInterval(intervals[index]);
+		}
     }, 1000);
 }
 
@@ -155,7 +164,10 @@ const server = app.listen(conf.serverPort, () => {
 			polling: {
 				interval: pollingIntervals[type],
 				stopOnError: false,
-			},
+			}/*,
+			logger: {
+				method: console.log
+			}*/
 		};
 		switch(type) {
 			case "HWE-P1": // P1 Meter
@@ -181,7 +193,14 @@ const server = app.listen(conf.serverPort, () => {
 			eventReceived(index,response);
 		});
 		conn[index].polling.getData.on('error', (error) => {
-			Logger.log(error,LogType.ERROR);
+			if(error.toString().includes("HeadersTimeoutError") || error.toString().includes("ConnectTimeoutError")) {
+				Logger.log(index+' (getData) : Injoignable ('+error+')',LogType.ERROR);
+			} else {
+				Logger.log(index+' (getData) : '+error,LogType.ERROR);
+			}
+			conn[index].polling.getData.stop();
+			discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
+			//jsend({eventType: 'doPing', id: index}); //not working... getting ECONNABORTED
 		});
 
 		/* {
@@ -199,10 +218,11 @@ const server = app.listen(conf.serverPort, () => {
 
 	});
 	discovery.on('error', (error) => {
-		Logger.log(error,LogType.ERROR);
+		Logger.log("Discovery : "+error,LogType.ERROR);
+		discovery.start();
 	});
 	discovery.on('warning', (error) => {
-		Logger.log(error,LogType.WARNING);
+		Logger.log("Discovery : "+error,LogType.WARNING);
 	});
 });
 
