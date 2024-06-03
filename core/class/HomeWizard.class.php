@@ -89,8 +89,14 @@ class HomeWizard extends eqLogic {
 									case 'timestamp':
 										$unite='';
 									break;
+									case 'factor':
+										$unite='';
+									break;
 									case 'kwh':
 										$unite="kWh";
+									break;
+									case 'hz':
+										$unite="Hz";
 									break;
 									default:
 										$unite=strtoupper($unite);
