@@ -429,6 +429,36 @@ class HomeWizard extends eqLogic {
 		}
 	}
 	
+	public static function hwConfig($setting, $params = []) {
+		if ($setting) {
+			$daemonState = HomeWizard::deamon_info();
+			if ($daemonState['state'] != 'ok') {
+				return false;
+			}
+			log::add('HomeWizard', 'debug', __("Configuration", __FILE__). ' ' . ucfirst($setting) . '...');
+			$url = "http://" . config::byKey('internalAddr') . ":" . config::byKey('socketport', 'HomeWizard') . "/";
+			$url .= 'config?setting=' . $setting . ((count($params)) ? "&" . http_build_query($params) : '');
+			try {
+				//$json = file_get_contents($url);
+				$request_http = new com_http($url);
+				$result = $request_http->exec(60, 1);
+				$json = json_decode($result, true);
+			} catch(Exception $e) {
+				log::add('HomeWizard', 'warning', __('Problème de communication avec le démon à la demande :', __FILE__) . $url . ' Exception : ' . $e);
+			} catch(Error $e) {
+				log::add('HomeWizard', 'warning', __('Problème de communication avec le démon à la demande :', __FILE__) . $url . ' Error : ' . $e);
+			}
+			if ($json === null) {
+				log::add('HomeWizard', 'debug', __("Le démon n'a rien répondu à la demande :", __FILE__) . $url);
+			}
+			if ($json['result'] != 'ok') {
+				log::add('HomeWizard', 'debug', __("Erreur du démon :", __FILE__) . $json['msg']);
+			}
+			log::add('HomeWizard', 'debug', ucfirst($setting) . ' brut : ' . $result);
+			return $json['value'];
+		}
+	}
+	
 	public function pingHost($host, $timeout = null) {
 		$timeoutValue="";
 		if($timeout) {
