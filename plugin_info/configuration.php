@@ -45,7 +45,7 @@ pre#pre_eventlog {
 </form>
 <script>
 
-  $('#bt_reinstallNodeJS').off('click').on('click', function() {
+	$('#bt_reinstallNodeJS').off('click').on('click', function() {
 		bootbox.confirm("{{Etes-vous sûr de vouloir supprimer et reinstaller NodeJS ? <br /> Merci de patienter 10-20 secondes quand vous aurez cliqué...}}", function(result) {
 			if (result) {
 				$.showLoading();
