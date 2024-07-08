@@ -142,10 +142,49 @@ myCommands.cmd = async function(req, res) {
 	}
 };
 
+myCommands.config = function(req, res) {
+	res.type('json');
+	res.status(202);
+	
+	Logger.log('Recu une configuration de jeedom :'+JSON.stringify(req.query),LogType.INFO);
+	
+	if ('setting' in req.query === false) {
+		const error="Pour faire une config, le démon a besoin de son nom";
+		Logger.log(error,LogType.ERROR); 
+		res.json({'result':'ko','msg':error});
+		return;
+	}
+	if ('value' in req.query === false) {
+		const error="Pour faire une config, le démon a besoin d'une valeur a configurer";
+		Logger.log(error,LogType.ERROR); 
+		res.json({'result':'ko','msg':error});
+		return;
+	}
+	
+	switch(req.query.setting) {
+		case 'sendLoglevel':
+			conf.logLevel = req.query.value;
+			if (conf.logLevel == 'debug') {Logger.setLogLevel(LogType.DEBUG);}
+			else if (conf.logLevel == 'info') {Logger.setLogLevel(LogType.INFO);}
+			else if (conf.logLevel == 'warning') {Logger.setLogLevel(LogType.WARNING);}
+			else {Logger.setLogLevel(LogType.ERROR);}
+		break;
+		default: {
+			const error = "Configuration inexistante";
+			Logger.log('ERROR CONFIG: ' + req.query.setting + ' : '+error,LogType.ERROR);
+			res.json({'result':'ko','msg':error});
+			return;
+		}
+	}
+	Logger.log("Configuration de : "+req.query.setting+" effectuée avec la valeur : "+((typeof req.query.value == "object")?JSON.stringify(req.query.value):req.query.value),LogType.INFO);
+	res.json({'result':'ok','value':req.query.value});
+};
+
 
 // prepare commands
 app.get('/stop', myCommands.stop);
 app.get('/cmd',	 myCommands.cmd);
+app.get('/config', myCommands.config);
 app.use(function(err, req, res, _next) {
 	res.type('json');
 	Logger.log(err,LogType.ERROR);
