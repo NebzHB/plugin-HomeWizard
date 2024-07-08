@@ -76,7 +76,7 @@ myCommands.stop = function(req, res) {
 	});
 };
 
-myCommands.cmd = function(req, res) {
+myCommands.cmd = async function(req, res) {
 	res.type('json');
 
 	Logger.log("Reçu une commande..."+JSON.stringify(req.query),LogType.Debug); 
@@ -95,31 +95,50 @@ myCommands.cmd = function(req, res) {
 	let result;
 	try {
 		if(req.query.cmd == 'power_on') {
-			result=conn[req.query.id].updateState({power_on: true});
+			result=await conn[req.query.id].updateState({power_on: true});
+			if(result.power_on === true) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else if(req.query.cmd == 'power_off') {
-			result=conn[req.query.id].updateState({power_on: false});
+			result=await conn[req.query.id].updateState({power_on: false});
+			if(result.power_on === false) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else if(req.query.cmd == 'lock') {
-			result=conn[req.query.id].updateState({switch_lock: true});
+			result=await conn[req.query.id].updateState({switch_lock: true});
+			if(result.switch_lock === true) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else if(req.query.cmd == 'unlock') {
-			result=conn[req.query.id].updateState({switch_lock: false});
+			result=await conn[req.query.id].updateState({switch_lock: false});
+			if(result.switch_lock === false) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else if(req.query.cmd == 'brightness') {
-			result=conn[req.query.id].updateState({brightness: parseInt(req.query.val)});
+			result=await conn[req.query.id].updateState({brightness: parseInt(req.query.val)});
+			if(result.brightness === parseInt(req.query.val)) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else if(req.query.cmd == 'identify') {
-			result=conn[req.query.id].identify();
+			result=await conn[req.query.id].identify();
+			if(result.identify === 'ok') {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
-			res.json({'result':'ko','msg':error});
-			return;
+			res.json({'result':'ko','error':error});
 		}
-		
 	} catch (e) {
+		Logger.log("Réponse de la commande KO : "+e.response,LogType.Info); 
 		res.json({'result':'ko','error':e});
-		console.error("CMD KO : ",e);
 	}
-
-	Logger.log("CMD OK : "+JSON.stringify(result, null, 4),LogType.Debug); 
-	res.json({'result':'ok'});
 };
 
 
