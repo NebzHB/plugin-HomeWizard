@@ -36,11 +36,19 @@ pre#pre_eventlog {
 		<center>
 			<a class="btn btn-danger btn-sm" id="bt_reinstallNodeJS"><i class="fas fa-recycle"></i> {{Réparation de NodeJS}} </a>
 		</center>
-		<br/>
-		<center>
-			<br /><br />
-			<input id="input_magicField" class="configKey form-control" data-l1key="magicField" style="width:300px;background-color:transparent !important;border:0px !important;" />
-		</center>
+	</fieldset>
+	<fieldset>
+		<legend>
+			<i class="fas fa-wrench"></i> {{Configuration}}
+		</legend>
+		<div class="form-group">
+			<label class="col-lg-4 control-label help" data-help="{{Période en seconde pour interroger l'équipement, il est déconseillé par le constructeur de descendre sous 1 seconde}}">{{Période}} HWE-SKT</label>
+			<div class="col-lg-4">
+				<div class="input-group">
+					<input class="configKey form-control roundedLeft" data-l1key="period_HWE-SKT" placeholder="5000" /><span class="input-group-addon roundedRight">ms</span>
+				</div>
+			</div>
+		</div>
 	</fieldset>
 </form>
 <script>
@@ -102,4 +110,10 @@ pre#pre_eventlog {
 			});
 		};
 	});
+	$('.help').each(function() {
+		if ($(this).attr('data-help') != undefined) {
+		  $(this).append(' <sup><i class="fas fa-question-circle tooltips" title="'+$(this).attr('data-help')+'"></i></sup>')
+		}
+	});
+	if(jeedomUtils) {jeedomUtils.initTooltips();}else{initTooltips();}
 </script>
