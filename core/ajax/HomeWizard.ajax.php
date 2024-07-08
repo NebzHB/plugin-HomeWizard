@@ -35,7 +35,10 @@ try {
 		$ret = HomeWizard::reinstallNodeJS();
 		ajax::success($ret);
 	} elseif (init('action') == 'sendLoglevel') {
-		HomeWizard::hwConfig('sendLoglevel',["value"=>log::convertLogLevel(init('level'))]);
+		log::add('HomeWizard','error',"level:".init('level'));
+		$level=log::convertLogLevel((init('level')==='default')?log::getConfig('log::level'):init('level'));
+		log::add('HomeWizard','error',"levelAfter:".$level);
+		HomeWizard::hwConfig('sendLoglevel',["value"=>$level]);
 		ajax::success();
 	} 
 	
