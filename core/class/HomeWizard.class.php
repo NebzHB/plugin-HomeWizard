@@ -604,27 +604,54 @@ class HomeWizardCmd extends cmd {
 
 		switch ($logical) {
 			case 'action_power_on' :
-				HomeWizard::hwExecute('cmd',['cmd'=>'power_on','id'=>$eqLogical]);
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'power_on','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			case 'action_power_off':
-				HomeWizard::hwExecute('cmd',['cmd'=>'power_off','id'=>$eqLogical]);
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'power_off','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			case 'action_lock' :
-				HomeWizard::hwExecute('cmd',['cmd'=>'lock','id'=>$eqLogical]);
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'lock','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			case 'action_unlock':
-				HomeWizard::hwExecute('cmd',['cmd'=>'unlock','id'=>$eqLogical]);
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'unlock','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			case 'action_brightness' :
-				HomeWizard::hwExecute('cmd',['cmd'=>'brightness','id'=>$eqLogical,'val'=>$_options['slider']]);
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'brightness','id'=>$eqLogical,'val'=>$_options['slider']]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			case 'action_identify' :
-				HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			default:
-
+				log::add('HomeWizard','error',__("Commande", __FILE__).' '.$logical.' '.__("inconnue", __FILE__));
+				return false;
 			break;
 		}
+		log::add('HomeWizard','info',__("Résultat de la commande OK", __FILE__));
+		return true;
 		//log::add('HomeWizard','debug',$logical);
 
 		//$eqLogic->getHomeWizardInfo(null,null,$hasToCheckPlaying);
