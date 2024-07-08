@@ -12,6 +12,7 @@ const hasOwnProperty = Object.prototype.hasOwnProperty;
 const pollingIntervals={
 	"HWE-P1":5000,
 	"HWE-SKT":5000,
+	"HWE-SKT_state":1000,
 	"HWE-WTR":5000,
 	"SDM230-wifi":5000,
 	"SDM630-wifi":5000,
@@ -166,7 +167,7 @@ function startStateInterval(index) {
 			clearInterval(intervals[index]);
 			delete intervals[index];
 		}
-    }, 1000);
+    }, pollingIntervals["HWE-SKT_state"]);
 }
 
 
