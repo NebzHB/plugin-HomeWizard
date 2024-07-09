@@ -41,14 +41,28 @@ pre#pre_eventlog {
 		<legend>
 			<i class="fas fa-wrench"></i> {{Configuration}}
 		</legend>
+		<?php
+			$types=[];
+			$eqLogics = eqLogic::byType('HomeWizard');
+			foreach ($eqLogics as $eqLogic) :
+				$eqType=$eqLogic->getConfiguration('type','');
+				if($eqType && !in_array($eqType,$types)) {
+					$types[]=$eqType;
+				}
+			}
+			foreach ($types as $type) :
+		?>
 		<div class="form-group">
-			<label class="col-lg-6 control-label help" data-help="{{Période en miliseconde pour interroger l'équipement, il est déconseillé par le constructeur de descendre sous 1 seconde}}">{{Période d'interrogation des}} HWE-SKT</label>
+			<label class="col-lg-6 control-label help" data-help="{{Période en miliseconde pour interroger l'équipement, il est déconseillé par le constructeur de descendre sous 1 seconde}}">{{Période d'interrogation des}} <?php echo $type; ?></label>
 			<div class="col-lg-1">
 				<div class="input-group">
-					<input class="configKey form-control roundedLeft" data-l1key="period_HWE-SKT" placeholder="5000" /><span class="input-group-addon roundedRight">ms</span>
+					<input class="configKey form-control roundedLeft" data-l1key="pollPeriods" data-l2key="<?php echo $type; ?>" placeholder="5000" /><span class="input-group-addon roundedRight">ms</span>
 				</div>
 			</div>
 		</div>
+		<?php
+			endforeach;
+		?>
 	</fieldset>
 </form>
 <script>
