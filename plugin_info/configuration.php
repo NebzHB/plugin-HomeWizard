@@ -44,7 +44,7 @@ pre#pre_eventlog {
 		<?php
 			$types=[];
 			$eqLogics = eqLogic::byType('HomeWizard');
-			foreach ($eqLogics as $eqLogic) :
+			foreach ($eqLogics as $eqLogic) {
 				$eqType=$eqLogic->getConfiguration('type','');
 				if($eqType && !in_array($eqType,$types)) {
 					$types[]=$eqType;
