@@ -8,16 +8,10 @@ $eqLogics = eqLogic::byType('HomeWizard');
 
 ?>
 <style>
-	.eqLogicAttr[data-l2key=pin] {
+	.eqLogicAttr[data-l2key=serial] {
 		filter: blur(3px);
 	}
-	.eqLogicAttr[data-l2key=pin]:hover, .eqLogicAttr[data-l2key=pin]:focus , .eqLogicAttr[data-l2key=pin]:placeholder-shown {
-		filter: blur(0px);
-	}
-	.eqLogicAttr[data-l2key=serial-number] {
-		filter: blur(3px);
-	}
-	.eqLogicAttr[data-l2key=serial-number]:hover, .eqLogicAttr[data-l2key=serial-number]:empty {
+	.eqLogicAttr[data-l2key=serial]:hover, .eqLogicAttr[data-l2key=serial]:empty {
 		filter: blur(0px);
 	}
 </style>
