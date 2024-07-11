@@ -111,10 +111,18 @@ class HomeWizard extends eqLogic {
 								"type"=>"info",
 								"subtype"=>"numeric",
 								"display"=>[
-                							"forceReturnLineBefore": 1
+                							"forceReturnLineBefore"=>1
+								],
+								"template"=>[
+									"dashboard"=>'line',
+									"mobile"=>'line'
 								]
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp') $cmd['subtype']='other';
+							if($key == 'total_power_import_kwh' || $key == 'total_power_export_kwh' || $key == 'active_power_w') {
+								$cmd['template']['dashboard']='tile';
+								$cmd['template']['mobile']='tile';
+							}
 							$hasNewCmd=$eqp->createCmd($cmd);
 						} else {
 							switch($key) {
