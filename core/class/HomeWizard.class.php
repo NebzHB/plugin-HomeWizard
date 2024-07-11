@@ -148,6 +148,13 @@ class HomeWizard extends eqLogic {
 					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id = ", __FILE__).$logical);
 				}
 			break;
+			case 'daemonReady':
+				$pollingIntervals 		= config::byKey('pollPeriods', 'HomeWizard', [], true);
+				$config=[
+					"pollingIntervals" => $pollingIntervals
+				];
+				HomeWizard::hwConfig('initConfig',["value"=>$config]);
+			break;
 			case 'doPing':
 				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getIsEnable() == 1){
