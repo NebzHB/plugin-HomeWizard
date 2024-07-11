@@ -12,12 +12,6 @@
 			}
 		},
 		{
-			"logicalId": "brightness",
-			"display": {
-				"generic_type": "LIGHT_STATE"
-			}
-		},
-		{
 			"logicalId": "active_power_w",
 			"display": {
 				"generic_type": "POWER"
@@ -84,7 +78,6 @@
 			"isVisible": 1,
 			"logicalId": "action_brightness",
 			"display": {
-				"generic_type": "LIGHT_SLIDER",
 				"forceReturnLineBefore": 1
 			},
 			"configuration": {
