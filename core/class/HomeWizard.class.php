@@ -55,7 +55,8 @@ class HomeWizard extends eqLogic {
 					serial: 'abcdserial',
 					product_type: 'HWE-P1',
 					product_name: 'P1 meter'
-				  }
+				  },
+      				  "firmware_version":"5.16"
 				}*/
 				$eq = [
 					"name"=>$mdns['txt']['product_name'].'_'.$mdns['txt']['serial'],
@@ -67,6 +68,7 @@ class HomeWizard extends eqLogic {
 						"hostname"=>$mdns['hostname'],
 						"type"=>$mdns['txt']['product_type'],
 						"serial"=>$mdns['txt']['serial'],
+						"firmware_version"=>$mdns['firmware_version'],
 					]
 				];
 				self::createEq($eq);
