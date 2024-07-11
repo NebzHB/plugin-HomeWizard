@@ -144,6 +144,10 @@ $eqLogics = eqLogic::byType('HomeWizard');
 									<div class="col-sm-3">
 										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="serial"></span>
 									</div>
+									<label class="col-sm-3 control-label">{{Version Firmware}}</label>
+									<div class="col-sm-3">
+										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="firmware_version"></span>
+									</div>
 								</div>
 							</fieldset>
 						</form>
