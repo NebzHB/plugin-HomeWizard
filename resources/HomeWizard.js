@@ -167,7 +167,7 @@ myCommands.config = function(req, res) {
 			for (const key in pollingIntervalsDefaults) {
 				if(pollingIntervalsDefaults.hasOwnProperty(key)) {
 					const value = req.query.value.pollingIntervals[key];
-					if (value === undefined || value === "" || value === null || Number(value) < 1000) {
+					if (value === undefined || value === "" || value === null || Number(value) < 100) {
 						conf.pollingIntervals[key] = pollingIntervalsDefaults[key];
 					} else {
 						conf.pollingIntervals[key] = Number(value);
