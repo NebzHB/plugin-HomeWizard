@@ -36,7 +36,8 @@
 			"type": "action",
 			"subtype": "other",
 			"display": {
-				"generic_type": "ENERGY_ON"
+				"generic_type": "ENERGY_ON",
+				"forceReturnLineBefore": 1
 			},
 			"value": "power_on",
 			"isVisible": 1,
@@ -58,7 +59,8 @@
 			"type": "action",
 			"subtype": "other",
 			"display": {
-				"generic_type": "SWITCH_ON"
+				"generic_type": "SWITCH_ON",
+				"forceReturnLineBefore": 1
 			},
 			"value": "switch_lock",
 			"isVisible": 1,
@@ -82,7 +84,8 @@
 			"isVisible": 1,
 			"logicalId": "action_brightness",
 			"display": {
-				"generic_type": "LIGHT_SLIDER"
+				"generic_type": "LIGHT_SLIDER",
+				"forceReturnLineBefore": 1
 			},
 			"configuration": {
 				"minValue":0,
@@ -95,7 +98,10 @@
 			"subtype": "other",
 			"value": "",
 			"isVisible": 1,
-			"logicalId": "action_identify"
+			"logicalId": "action_identify",
+			"display": {
+				"forceReturnLineBefore": 1
+			}
 		}
 	]
 }
