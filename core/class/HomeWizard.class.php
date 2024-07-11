@@ -122,6 +122,11 @@ class HomeWizard extends eqLogic {
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp') $cmd['subtype']='other';
 							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
+							if($key == 'brightness') {
+								$cmd['configuration']['minValue']=0;
+								$cmd['configuration']['maxValue']=255;
+								unset($cmd['template']);
+							}
 							if($key == 'total_power_import_kwh' || $key == 'total_power_export_kwh' || $key == 'active_power_w') {
 								$cmd['template']['dashboard']='tile';
 								$cmd['template']['mobile']='tile';
