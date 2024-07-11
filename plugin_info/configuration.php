@@ -123,6 +123,14 @@ pre#pre_eventlog {
 				}
 			});
 		};
+		
+		btSave = $('#bt_savePluginConfig');
+		if (!btSave.hasClass('HomeWizardConfig')) { // Avoid multiple declaration of the event on the button
+			btSave.addClass('HomeWizardConfig');
+			btSave.on('click', function() {
+				$.fn.showAlert({message: "{{Le démon n'est averti, il est nécessire de le redémarrer pour prendre en compte les changements de périodicité.}}", level: 'success'});
+			});
+		};
 	});
 	$('.help').each(function() {
 		if ($(this).attr('data-help') != undefined) {
