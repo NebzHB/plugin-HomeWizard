@@ -9,7 +9,7 @@ const express = require('express');
 Logger.setLogLevel(LogType.DEBUG);
 const conf={};
 const hasOwnProperty = Object.prototype.hasOwnProperty;
-const pollingIntervals={
+const pollingIntervalsDefaults={
 	"HWE-P1":5000,
 	"HWE-SKT":5000,
 	"HWE-SKT_state":1000,
@@ -162,6 +162,21 @@ myCommands.config = function(req, res) {
 	}
 	
 	switch(req.query.setting) {
+		case 'initConfig':
+			conf.pollingIntervals = {};
+			for (const key in pollingIntervalsDefaults) {
+				if(pollingIntervalsDefaults.hasOwnProperty(key)) {
+					const value = req.query.value.pollingIntervals[key];
+					if (value === undefined || value === "" || value === null || Number(value) < 1000) {
+						conf.pollingIntervals[key] = pollingIntervalsDefaults[key];
+					} else {
+						conf.pollingIntervals[key] = Number(value);
+					}
+				}
+			}
+			Logger.log("Configuration des intervales de polling : "+JSON.stringify(conf.pollingIntervals),LogType.DEBUG);
+			discover();
+		break;
 		case 'sendLoglevel':
 			conf.logLevel = req.query.value;
 			if (conf.logLevel == 'debug') {Logger.setLogLevel(LogType.DEBUG);}
@@ -206,13 +221,19 @@ function startStateInterval(index) {
 			clearInterval(intervals[index]);
 			delete intervals[index];
 		}
-    }, pollingIntervals["HWE-SKT_state"]);
+    }, conf.pollingIntervals["HWE-SKT_state"]);
 }
 
 
 /** Listen **/
 const server = app.listen(conf.serverPort, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
+	Logger.log("Attente de la réception de la configuration...",LogType.INFO);
+	jsend({'eventType': 'daemonReady', 'result':true});
+});
+
+function discover() {	
+
 	discovery.start();
 	
 	discovery.on('response', async (mdns) => {
@@ -224,7 +245,7 @@ const server = app.listen(conf.serverPort, () => {
 		
 		const param={
 			polling: {
-				interval: pollingIntervals[type],
+				interval: conf.pollingIntervals[type],
 				stopOnError: false,
 			},
 			/* logger: {
@@ -300,10 +321,10 @@ const server = app.listen(conf.serverPort, () => {
 	discovery.on('warning', (error) => {
 		Logger.log("Discovery : "+error,LogType.WARNING);
 	});
-});
+}
 
 
-async function eventReceived(who,ev) {
+function eventReceived(who,ev) {
 	const w=who.split('_');
 	Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.INFO);
 	jsend({eventType: 'updateValue', id: who, value: ev});
