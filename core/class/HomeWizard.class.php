@@ -109,7 +109,10 @@ class HomeWizard extends eqLogic {
 								"isVisible"=>1,
 								"unite"=>$unite,
 								"type"=>"info",
-								"subtype"=>"numeric"
+								"subtype"=>"numeric",
+								"display"=>[
+                							"forceReturnLineBefore": 1
+								]
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp') $cmd['subtype']='other';
 							$hasNewCmd=$eqp->createCmd($cmd);
