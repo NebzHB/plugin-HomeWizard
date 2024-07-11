@@ -12,6 +12,13 @@
 			}
 		},
 		{
+			"logicalId": "brightness",
+			"configuration": {
+				"minValue": 0,
+				"maxValue": 255
+			}
+		},
+		{
 			"logicalId": "active_power_w",
 			"display": {
 				"generic_type": "POWER"
