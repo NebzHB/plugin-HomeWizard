@@ -147,7 +147,7 @@ class HomeWizard extends eqLogic {
 				}
 			break;
 			case 'daemonReady':
-				$pollingIntervals 		= config::byKey('pollPeriods', 'HomeWizard', [], true);
+				$pollingIntervals 		= config::byKey('pollPeriods', 'HomeWizard', ["HWE-P1"=>0], true);
 				$config=[
 					"pollingIntervals" => $pollingIntervals
 				];
