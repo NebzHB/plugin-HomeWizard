@@ -598,7 +598,8 @@ class HomeWizard extends eqLogic {
 				"type"=>"info",
 				"subtype"=>"binary",
 				"display"=> [
-					"generic_type"=>"ONLINE"
+					"generic_type"=>"ONLINE",
+					"forceReturnLineBefore"=>1
 				],
 				"isVisible"=>1,
 				"isHistorized"=>1
