@@ -221,7 +221,7 @@ const server = app.listen(conf.serverPort, () => {
 		if(mdns.txt.api_enabled == 0) {Logger.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
 
 		const index=type+'_'+mdns.txt.serial;
-		jsend({eventType: 'createEq', id: index, mdns: mdns});
+		
 		const param={
 			polling: {
 				interval: pollingIntervals[type],
@@ -249,7 +249,12 @@ const server = app.listen(conf.serverPort, () => {
 				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 		}
+		
+		const basic = await conn[index].getBasicInformation();
+		mdns.firmware_version=basic.firmware_version;
+		
 		conn[index].mdns=mdns;
+		jsend({eventType: 'createEq', id: index, mdns: mdns});
 		conn[index].polling.getData.start();
 		conn[index].polling.getData.on('response', (response) => {
 			eventReceived(index,response);
