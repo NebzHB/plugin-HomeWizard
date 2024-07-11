@@ -114,6 +114,13 @@ class HomeWizard extends eqLogic {
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model') $cmd['subtype']='other';
 							$hasNewCmd=$eqp->createCmd($cmd);
 						} else {
+							switch($key) {
+								case "montly_power_peak_timestamp":
+									if (preg_match('/^\d{12}$/', $value)) {
+										$value = = DateTime::createFromFormat('ymdHis', $value)->format('d/m/y H:i:s');
+									}
+								break;
+							}
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
