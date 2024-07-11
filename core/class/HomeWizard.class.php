@@ -117,7 +117,7 @@ class HomeWizard extends eqLogic {
 							switch($key) {
 								case "montly_power_peak_timestamp":
 									if (preg_match('/^\d{12}$/', $value)) {
-										$value = = DateTime::createFromFormat('ymdHis', $value)->format('d/m/y H:i:s');
+										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/y H:i:s');
 									}
 								break;
 							}
