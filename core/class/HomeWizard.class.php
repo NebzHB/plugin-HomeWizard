@@ -357,7 +357,7 @@ class HomeWizard extends eqLogic {
 			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
 			if($pid) {
 				exec(system::getCmdSudo().'kill -15 ' . $pid.' > /dev/null 2>&1');
-				log::add('hkControl', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+				log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
 				for ($retry = 0; $retry < 3; $retry++) {
 					if (self::deamon_info()['state'] != 'ok') { 
 						return true;
@@ -369,7 +369,7 @@ class HomeWizard extends eqLogic {
 			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
 			if($pid) {
 				exec(system::getCmdSudo().'kill -9 ' . $pid.' > /dev/null 2>&1');
-				log::add('hkControl', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
+				log::add('HomeWizard', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
 			}
 		}
 	}	
