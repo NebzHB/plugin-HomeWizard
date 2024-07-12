@@ -128,7 +128,7 @@ pre#pre_eventlog {
 		if (!btSave.hasClass('HomeWizardConfig')) { // Avoid multiple declaration of the event on the button
 			btSave.addClass('HomeWizardConfig');
 			btSave.on('click', function() {
-				$.fn.showAlert({message: "{{Le démon n'est averti, il est nécessire de le redémarrer pour prendre en compte les changements de périodicité.}}", level: 'success'});
+				$.fn.showAlert({message: "{{Le démon n'est pas averti, il est nécessire de le redémarrer pour prendre en compte les changements de périodicité.}}", level: 'success'});
 			});
 		};
 	});
