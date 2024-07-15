@@ -120,7 +120,7 @@ class HomeWizard extends eqLogic {
 									"mobile"=>'line'
 								]
 							];
-							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'active-tariff') $cmd['subtype']='string';
+							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'active_tariff') $cmd['subtype']='string';
 							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
 							if($key == 'brightness') {
 								unset($cmd['template']);
