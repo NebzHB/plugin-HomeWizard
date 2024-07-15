@@ -132,10 +132,24 @@ class HomeWizard extends eqLogic {
 							$hasNewCmd=$eqp->createCmd($cmd);
 						} else {
 							switch($key) {
-								case "montly_power_peak_timestamp":
+								case 'montly_power_peak_timestamp':
 									if (preg_match('/^\d{12}$/', $value)) {
 										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/Y H:i:s');
 									}
+								break;
+								case 'active_tariff':
+									switch($value) {
+										case '1':
+											$txt='HP';
+										break;
+										case '2':
+											$txt='HC';
+										break;
+										default:
+											$txt='Inconnue('.$value.')';
+										break;
+									}
+									$eqp->checkAndUpdateCmd('active_tariff_txt',$txt);
 								break;
 							}
 							$eqp->checkAndUpdateCmd($key,$value);
