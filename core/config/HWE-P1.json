@@ -1,7 +1,7 @@
 {	"modifyCommands": [],
 	"additionnalCommands": [
 		{
-			"name": "{{Tarif en cours}}",
+			"name": "{{Tarif en cours (Texte)}}",
 			"type": "info",
 			"subtype": "string",
 			"display": {
