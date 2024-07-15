@@ -1,0 +1,14 @@
+{	"modifyCommands": [],
+	"additionnalCommands": [
+		{
+			"name": "{{Tarif en cours}}",
+			"type": "info",
+			"subtype": "string",
+			"display": {
+				"forceReturnLineBefore": 1
+			},
+			"isVisible": 1,
+			"logicalId": "active_tariff_txt"
+		}
+	]
+}
