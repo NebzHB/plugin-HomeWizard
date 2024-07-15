@@ -140,13 +140,13 @@ class HomeWizard extends eqLogic {
 								case 'active_tariff':
 									switch($value) {
 										case '1':
-											$txt='HP';
+											$txt=__('HP', __FILE__);
 										break;
 										case '2':
-											$txt='HC';
+											$txt=__('HC', __FILE__);
 										break;
 										default:
-											$txt='Inconnue('.$value.')';
+											$txt=__('Inconnu', __FILE__).'('.$value.')';
 										break;
 									}
 									$eqp->checkAndUpdateCmd('active_tariff_txt',$txt);
