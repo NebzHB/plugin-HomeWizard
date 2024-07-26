@@ -137,5 +137,9 @@ pre#pre_eventlog {
 		  $(this).append(' <sup><i class="fas fa-question-circle tooltips" title="'+$(this).attr('data-help')+'"></i></sup>')
 		}
 	});
+
+	var CommunityButton = document.querySelector('#createCommunityPost > span');
+	if(CommunityButton) {CommunityButton.innerHTML = " {{Communauté}}";}
+	
 	if(jeedomUtils) {jeedomUtils.initTooltips();}else{initTooltips();}
 </script>
