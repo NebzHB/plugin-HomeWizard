@@ -26,6 +26,29 @@ $('#bt_resetEqlogicSearch').on('click', function() {
   $('#in_searchEqlogic').keyup();
 });
 
+$('.eqLogicAction[data-action=createCommunityPost]').on('click', function (event) {
+    jeedom.plugin.createCommunityPost({
+      type: eqType,
+      error: function(error) {
+        domUtils.hideLoading()
+        jeedomUtils.showAlert({
+          message: error.message,
+          level: 'danger'
+        })
+      },
+      success: function(data) {
+        let element = document.createElement('a');
+        element.setAttribute('href', data.url);
+        element.setAttribute('target', '_blank');
+        element.style.display = 'none';
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+      }
+    });
+    return;
+});
+
 for(var i=1;i<($('.searchBox').length+2);i++) {
 	if($('#in_searchEqlogic'+i).length) {
 		$('#in_searchEqlogic'+i).off('keyup').keyup(function() {
