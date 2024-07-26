@@ -8,16 +8,10 @@ $eqLogics = eqLogic::byType('HomeWizard');
 
 ?>
 <style>
-	.eqLogicAttr[data-l2key=pin] {
+	.eqLogicAttr[data-l2key=serial] {
 		filter: blur(3px);
 	}
-	.eqLogicAttr[data-l2key=pin]:hover, .eqLogicAttr[data-l2key=pin]:focus , .eqLogicAttr[data-l2key=pin]:placeholder-shown {
-		filter: blur(0px);
-	}
-	.eqLogicAttr[data-l2key=serial-number] {
-		filter: blur(3px);
-	}
-	.eqLogicAttr[data-l2key=serial-number]:hover, .eqLogicAttr[data-l2key=serial-number]:empty {
+	.eqLogicAttr[data-l2key=serial]:hover, .eqLogicAttr[data-l2key=serial]:empty {
 		filter: blur(0px);
 	}
 </style>
@@ -35,6 +29,16 @@ $eqLogics = eqLogic::byType('HomeWizard');
 				</br />
 				<span>{{Santé}}</span>
 			</div>
+			<?php
+			$jeedomVersion=jeedom::version() ?? '0';
+			$displayInfo=version_compare($jeedomVersion, '4.4.0', '>=');
+			if($displayInfo){
+				echo '<div class="cursor eqLogicAction warning" data-action="createCommunityPost" title="{{Ouvrir une demande d\'aide sur le forum communautaire}}">';
+				echo '<i class="fas fa-ambulance"></i><br>';
+				echo '<span>{{Community}}</span>';
+				echo '</div>';
+			}
+			?>
 		</div>
 		<legend><i class="fab fa-apple"></i>  {{Mes Equipements HomeWizard}}</legend>
 		<div class="input-group" style="margin-bottom:5px;">
@@ -128,14 +132,6 @@ $eqLogics = eqLogic::byType('HomeWizard');
 										<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="address" placeholder="{{Adresse Ip}}" readonly />
 									</div>
 								</div>
-								<div class="form-group" id="refreshTime">
-									<label class="col-sm-4 control-label help" data-help="{{Temps en secondes entre deux rafraichissements des données (>=1s)}}">{{Rafraîchir}}</label>
-									<div class="col-sm-6">
-										<div class="input-group">
-											<input type="text" class="eqLogicAttr form-control roundedLeft" data-l1key="configuration" data-l2key="refreshTime" placeholder="{{5}}"/><span class="input-group-addon">sec</span>
-										</div>
-									</div>
-								</div>
 							</fieldset>
 						</form>
 					</div>
@@ -157,6 +153,10 @@ $eqLogics = eqLogic::byType('HomeWizard');
 									<label class="col-sm-3 control-label">{{Numéro de série}}</label>
 									<div class="col-sm-3">
 										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="serial"></span>
+									</div>
+									<label class="col-sm-3 control-label">{{Version Firmware}}</label>
+									<div class="col-sm-3">
+										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="firmware_version"></span>
 									</div>
 								</div>
 							</fieldset>

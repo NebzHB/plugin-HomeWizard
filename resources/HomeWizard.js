@@ -9,12 +9,13 @@ const express = require('express');
 Logger.setLogLevel(LogType.DEBUG);
 const conf={};
 const hasOwnProperty = Object.prototype.hasOwnProperty;
-const pollingIntervals={
+const pollingIntervalsDefaults={
 	"HWE-P1":5000,
 	"HWE-SKT":5000,
+	"HWE-SKT_state":1000,
 	"HWE-WTR":5000,
 	"SDM230-wifi":5000,
-	"SDM630-wifi":5000
+	"SDM630-wifi":5000,
 };
 
 
@@ -38,7 +39,7 @@ process.argv.forEach(function(val, index) {
 });
 
 
-const jsend = require('./utils/jeedom.js')('HomeWizard',conf.urlJeedom,conf.apiKey,conf.logLevel);
+const jsend = require('./utils/jeedom.js')('HomeWizard',conf.urlJeedom,conf.apiKey,conf.logLevel,'jsonrpc');
 
 
 // display starting
@@ -51,6 +52,7 @@ for(const name in conf) {
 
 
 const conn = {};
+const intervals = {};
 // prepare callback for discovery
 const discovery = new HW.HomeWizardEnergyDiscovery();
 
@@ -58,30 +60,6 @@ const discovery = new HW.HomeWizardEnergyDiscovery();
 /* Routing */
 const app = express();
 const myCommands = {};
-myCommands.test = function(req,res) {
-	res.type('json');
-
-	Logger.log("Reçu une demande de test...",LogType.Debug); 
-	let isOK=true;
-	try {
-		for(const c in conn) {
-			if (hasOwnProperty.call(conn,c)) {
-				if(!conn[c].isPolling.getData) {isOK=false;}
-			}
-		}
-	} catch (e) {
-		res.json({'result':'ko','error':e});
-		Logger.log("TEST KO : "+JSON.stringify(e, null, 4),LogType.Debug); 
-	}
-	if(!isOK) {
-		res.json({'result':'ko','error':'no polling on '+c});
-		Logger.log("TEST KO : no polling on "+c,LogType.Debug); 
-	}
-
-	Logger.log("TEST OK",LogType.Debug); 
-	res.json({'result':'ok'});
-};
-
 
 /** Stop the server **/
 myCommands.stop = function(req, res) {
@@ -99,7 +77,7 @@ myCommands.stop = function(req, res) {
 	});
 };
 
-myCommands.cmd = function(req, res) {
+myCommands.cmd = async function(req, res) {
 	res.type('json');
 
 	Logger.log("Reçu une commande..."+JSON.stringify(req.query),LogType.Debug); 
@@ -115,33 +93,113 @@ myCommands.cmd = function(req, res) {
 		res.json({'result':'ko','msg':error});
 		return;
 	}
-
+	let result;
 	try {
 		if(req.query.cmd == 'power_on') {
-			const result=conn[req.query.id].updateState({ power_on: true });
+			result=await conn[req.query.id].updateState({power_on: true});
+			if(result.power_on === true) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else if(req.query.cmd == 'power_off') {
-			const result=conn[req.query.id].updateState({ power_on: false });
+			result=await conn[req.query.id].updateState({power_on: false});
+			if(result.power_on === false) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
+		} else if(req.query.cmd == 'lock') {
+			result=await conn[req.query.id].updateState({switch_lock: true});
+			if(result.switch_lock === true) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
+		} else if(req.query.cmd == 'unlock') {
+			result=await conn[req.query.id].updateState({switch_lock: false});
+			if(result.switch_lock === false) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
+		} else if(req.query.cmd == 'brightness') {
+			result=await conn[req.query.id].updateState({brightness: parseInt(req.query.val)});
+			if(result.brightness === parseInt(req.query.val)) {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
+		} else if(req.query.cmd == 'identify') {
+			result=await conn[req.query.id].identify();
+			if(result.identify === 'ok') {
+				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+				res.json({'result':'ok'});
+			}
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
+			res.json({'result':'ko','error':error});
+		}
+	} catch (e) {
+		Logger.log("Réponse de la commande KO : "+e.response,LogType.Info); 
+		res.json({'result':'ko','error':e});
+	}
+};
+
+myCommands.config = function(req, res) {
+	res.type('json');
+	res.status(202);
+	
+	Logger.log('Recu une configuration de jeedom :'+JSON.stringify(req.query),LogType.INFO);
+	
+	if ('setting' in req.query === false) {
+		const error="Pour faire une config, le démon a besoin de son nom";
+		Logger.log(error,LogType.ERROR); 
+		res.json({'result':'ko','msg':error});
+		return;
+	}
+	if ('value' in req.query === false) {
+		const error="Pour faire une config, le démon a besoin d'une valeur a configurer";
+		Logger.log(error,LogType.ERROR); 
+		res.json({'result':'ko','msg':error});
+		return;
+	}
+	
+	switch(req.query.setting) {
+		case 'initConfig':
+			conf.pollingIntervals = {};
+			for (const key in pollingIntervalsDefaults) {
+				if(pollingIntervalsDefaults.hasOwnProperty(key)) {
+					const value = req.query.value.pollingIntervals[key];
+					if (value === undefined || value === "" || value === null || Number(value) < 100) {
+						conf.pollingIntervals[key] = pollingIntervalsDefaults[key];
+					} else {
+						conf.pollingIntervals[key] = Number(value);
+					}
+				}
+			}
+			Logger.log("Configuration des intervales de polling : "+JSON.stringify(conf.pollingIntervals),LogType.DEBUG);
+			discover();
+		break;
+		case 'sendLoglevel':
+			conf.logLevel = req.query.value;
+			if (conf.logLevel == 'debug') {Logger.setLogLevel(LogType.DEBUG);}
+			else if (conf.logLevel == 'info') {Logger.setLogLevel(LogType.INFO);}
+			else if (conf.logLevel == 'warning') {Logger.setLogLevel(LogType.WARNING);}
+			else {Logger.setLogLevel(LogType.ERROR);}
+		break;
+		default: {
+			const error = "Configuration inexistante";
+			Logger.log('ERROR CONFIG: ' + req.query.setting + ' : '+error,LogType.ERROR);
 			res.json({'result':'ko','msg':error});
 			return;
 		}
-		
-	} catch (e) {
-		res.json({'result':'ko','error':e});
-		Logger.log("CMD KO : "+JSON.stringify(e, null, 4),LogType.Debug); 
 	}
-
-	Logger.log("CMD OK : "+result,LogType.Debug); 
-	res.json({'result':'ok'});
-}
+	Logger.log("Configuration de : "+req.query.setting+" effectuée avec la valeur : "+((typeof req.query.value == "object")?JSON.stringify(req.query.value):req.query.value),LogType.INFO);
+	res.json({'result':'ok','value':req.query.value});
+};
 
 
 // prepare commands
-app.get('/test', myCommands.test);
 app.get('/stop', myCommands.stop);
 app.get('/cmd',	 myCommands.cmd);
+app.get('/config', myCommands.config);
 app.use(function(err, req, res, _next) {
 	res.type('json');
 	Logger.log(err,LogType.ERROR);
@@ -149,9 +207,33 @@ app.use(function(err, req, res, _next) {
 });
 
 
+function startStateInterval(index) {
+    intervals[index] = setInterval(async () => {
+		try {
+			const state = await conn[index].getState();
+			eventReceived(index,state);
+		} catch(error) {
+			if(error.toString().includes("TimeoutError")) {
+				Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
+			} else {
+				Logger.log(index+' (getState) : '+error,LogType.ERROR);
+			}
+			clearInterval(intervals[index]);
+			delete intervals[index];
+		}
+    }, conf.pollingIntervals["HWE-SKT_state"]);
+}
+
+
 /** Listen **/
 const server = app.listen(conf.serverPort, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
+	Logger.log("Attente de la réception de la configuration...",LogType.INFO);
+	jsend({'eventType': 'daemonReady', 'result':true});
+});
+
+function discover() {	
+
 	discovery.start();
 	
 	discovery.on('response', async (mdns) => {
@@ -160,12 +242,15 @@ const server = app.listen(conf.serverPort, () => {
 		if(mdns.txt.api_enabled == 0) {Logger.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
 
 		const index=type+'_'+mdns.txt.serial;
-		jsend({eventType: 'createEq', id: index, mdns: mdns});
+		
 		const param={
 			polling: {
-				interval: pollingIntervals[type],
+				interval: conf.pollingIntervals[type],
 				stopOnError: false,
 			},
+			/* logger: {
+				method: console.log
+			} */
 		};
 		switch(type) {
 			case "HWE-P1": // P1 Meter
@@ -173,13 +258,7 @@ const server = app.listen(conf.serverPort, () => {
 			break;
 			case "HWE-SKT": // Energy Socket
 				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
-				conn[index].polling.getState.start();
-				conn[index].polling.getState.on('response', response => {
-					eventReceived(index,response);
-				});
-				conn[index].polling.getState.on('error', error => {
-					Logger.log(error,LogType.ERROR);
-				});
+				startStateInterval(index);
 			break;
 			case "HWE-WTR": // Watermeter (only on USB)
 				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
@@ -191,16 +270,37 @@ const server = app.listen(conf.serverPort, () => {
 				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 		}
+		
+		const basic = await conn[index].getBasicInformation();
+		mdns.firmware_version=basic.firmware_version;
+		
 		conn[index].mdns=mdns;
+		jsend({eventType: 'createEq', id: index, mdns: mdns});
 		conn[index].polling.getData.start();
-		conn[index].polling.getData.on('response', response => {
+		conn[index].polling.getData.on('response', (response) => {
 			eventReceived(index,response);
 		});
-		conn[index].polling.getData.on('error', error => {
-			Logger.log(error,LogType.ERROR);
+		conn[index].polling.getData.on('error', (error) => {
+			if(error.toString().includes("TimeoutError")) {
+				Logger.log(index+' (getData) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
+			} else {
+				Logger.log(index+' (getData) : '+error,LogType.ERROR);
+			}
+			try {
+				conn[index].polling.getData.stop();
+				if(intervals[index]) {
+					clearInterval(intervals[index]);
+					delete intervals[index];
+				}
+				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
+				jsend({eventType: 'doPing', id: index});
+				delete conn[index];
+			} catch(e){
+				// Don't need to do anything
+			}
 		});
-		
-		/*{
+
+		/* {
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
 		  fqdn: 'p1meter-ABABAB._hwenergy._tcp.local',
@@ -211,19 +311,20 @@ const server = app.listen(conf.serverPort, () => {
 			product_type: 'HWE-P1',
 			product_name: 'P1 meter'
 		  }
-		}*/
+		} */
 
 	});
-	discovery.on('error', error => {
-	  Logger.log(error,LogType.ERROR);
+	discovery.on('error', (error) => {
+		Logger.log("Discovery : "+error,LogType.ERROR);
+		discovery.start();
 	});
-	discovery.on('warning', error => {
-	  Logger.log(error,LogType.WARNING);
+	discovery.on('warning', (error) => {
+		Logger.log("Discovery : "+error,LogType.WARNING);
 	});
-});
+}
 
 
-async function eventReceived(who,ev) {
+function eventReceived(who,ev) {
 	const w=who.split('_');
 	Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.INFO);
 	jsend({eventType: 'updateValue', id: who, value: ev});
@@ -247,41 +348,6 @@ Promise.raceAll = function(promises, timeoutTime, timeoutVal) {
         return Promise.race([p, Promise.delay(timeoutTime, timeoutVal)]);
     }));
 };
-
-
-function toBool(val) {
-	if (val == 'false' || val == '0') {
-		return false;
-	} else {
-		return Boolean(val);
-	}
-}
-
-
-// Speed up calls to hasOwnProperty
-function isEmpty(obj) {
-    // null and undefined are 'empty'
-    if (obj == null) {return true;}
-
-    // Assume if it has a length property with a non-zero value
-    // that that property is correct.
-    if (obj.length > 0) {return false;}
-    if (obj.length === 0) {return true;}
-
-    // If it isn't an object at this point
-    // it is empty, but it can't be anything *but* empty
-    // Is it empty?  Depends on your application.
-    if (typeof obj !== 'object') {return true;}
-
-    // Otherwise, does it have any properties of its own?
-    // Note that this doesn't handle
-    // toString and valueOf enumeration bugs in IE < 9
-    for (const key in obj) {
-        if (hasOwnProperty.call(obj, key)) {return false;}
-    }
-
-    return true;
-}
 
 
 process.on('SIGHUP', function() {

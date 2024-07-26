@@ -26,7 +26,7 @@ try {
 	
 	ajax::init();
 
-	if (init('action') !=  'reinstallNodeJS') {
+	if (init('action') ==  'reinstallNodeJS') {
 		$daemonState=HomeWizard::deamon_info();
 		if($daemonState['state'] != 'ok') {
 			ajax::error(__("Le démon n'est pas démarré", __FILE__));
@@ -34,10 +34,11 @@ try {
 
 		$ret = HomeWizard::reinstallNodeJS();
 		ajax::success($ret);
-	} elseif (init('action') == 'reDiscover') {
-		HomeWizard::hkExecute('reDiscover');
+	} elseif (init('action') == 'sendLoglevel') {
+		$level=log::convertLogLevel((init('level')==='default')?log::getConfig('log::level'):init('level'));
+		HomeWizard::hwConfig('sendLoglevel',["value"=>$level]);
 		ajax::success();
-	}
+	} 
 	
 	
 	

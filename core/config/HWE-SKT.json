@@ -1,0 +1,107 @@
+{	"modifyCommands": [
+		{
+			"logicalId": "power_on",
+			"display": {
+				"generic_type": "ENERGY_STATE"
+			}
+		},
+		{
+			"logicalId": "switch_lock",
+			"display": {
+				"generic_type": "SWITCH_STATE"
+			}
+		},
+		{
+			"logicalId": "brightness",
+			"configuration": {
+				"minValue": 0,
+				"maxValue": 255
+			}
+		},
+		{
+			"logicalId": "active_power_w",
+			"display": {
+				"generic_type": "POWER"
+			}
+		},
+		{
+			"logicalId": "total_power_import_kwh",
+			"display": {
+				"generic_type": "CONSUMPTION"
+			}
+		}
+	],
+	"additionnalCommands": [
+		{
+			"name": "{{Allumer}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "ENERGY_ON",
+				"forceReturnLineBefore": 1
+			},
+			"value": "power_on",
+			"isVisible": 1,
+			"logicalId": "action_power_on"
+		},
+    	{
+			"name": "{{Eteindre}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "ENERGY_OFF"
+			},
+			"value": "power_on",
+			"isVisible": 1,
+			"logicalId": "action_power_off"
+		},
+		{
+			"name": "{{Verrouiller}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "SWITCH_ON",
+				"forceReturnLineBefore": 1
+			},
+			"value": "switch_lock",
+			"isVisible": 1,
+			"logicalId": "action_lock"
+		},
+    		{
+			"name": "{{Déverrouiller}}",
+			"type": "action",
+			"subtype": "other",
+			"display": {
+				"generic_type": "SWITCH_OFF"
+			},
+			"value": "switch_lock",
+			"isVisible": 1,
+			"logicalId": "action_unlock"
+		},
+		{
+			"name": "{{Luminosité Anneau}}",
+			"type": "action",
+			"subtype": "slider",
+			"isVisible": 1,
+			"logicalId": "action_brightness",
+			"display": {
+				"forceReturnLineBefore": 1
+			},
+			"configuration": {
+				"minValue":0,
+				"maxValue":255
+			}
+		},
+		{
+			"name": "{{Identifier}}",
+			"type": "action",
+			"subtype": "other",
+			"value": "",
+			"isVisible": 1,
+			"logicalId": "action_identify",
+			"display": {
+				"forceReturnLineBefore": 1
+			}
+		}
+	]
+}

@@ -26,6 +26,29 @@ $('#bt_resetEqlogicSearch').on('click', function() {
   $('#in_searchEqlogic').keyup();
 });
 
+$('.eqLogicAction[data-action=createCommunityPost]').on('click', function (event) {
+    jeedom.plugin.createCommunityPost({
+      type: eqType,
+      error: function(error) {
+        domUtils.hideLoading()
+        jeedomUtils.showAlert({
+          message: error.message,
+          level: 'danger'
+        })
+      },
+      success: function(data) {
+        let element = document.createElement('a');
+        element.setAttribute('href', data.url);
+        element.setAttribute('target', '_blank');
+        element.style.display = 'none';
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+      }
+    });
+    return;
+});
+
 for(var i=1;i<($('.searchBox').length+2);i++) {
 	if($('#in_searchEqlogic'+i).length) {
 		$('#in_searchEqlogic'+i).off('keyup').keyup(function() {
@@ -123,8 +146,8 @@ function addCmdToTable(_cmd) {
     $('#table_cmd tbody tr:last').setValues(_cmd, '.cmdAttr');
     jeedom.cmd.changeType($('#table_cmd tbody tr:last'), init(_cmd.subType));
 	
-	function refreshValue(val,show=true) {
-		$('.cmd[data-cmd_id=' + _cmd.id + '] .form-control[data-key=value]').value(val);
+	function refreshValue(val, show=true, unit='') {
+		$('.cmd[data-cmd_id=' + _cmd.id + '] .form-control[data-key=value]').value(val+((unit)?' '+unit:''));
 		if(show){
 			$('.cmd[data-cmd_id=' + _cmd.id + '] .form-control[data-key=value]').attr('style','background-color:#ffff99 !important;');
 			setTimeout(function(){
@@ -140,13 +163,13 @@ function addCmdToTable(_cmd) {
 				cache: 0,
 				notify: false,
 				success: function(result) {
-					refreshValue(result,false);
+					refreshValue(result,false, _cmd.unite);
 			}});
 		
 		
 			// Set the update value callback
 			jeedom.cmd.update[_cmd.id] = function(_options) {
-				refreshValue(_options.display_value);
+				refreshValue(_options.display_value,true,_options.unit);
 			}
 		}
 	}	

@@ -31,20 +31,29 @@ class HomeWizard extends eqLogic {
 			log::add('HomeWizard', 'debug', __("Offline Réseau : ", __FILE__) . $HomeWizard->getName());
 		}
 	}
+	public static function getConfigForCommunity()
+	{
+		$update=update::byTypeAndLogicalId('plugin',__CLASS__);
+		$ver=$update->getLocalVersion();
+		$conf=$update->getConfiguration();
+		//log::add(__CLASS__,'debug',"Installation dépendances sur Jeedom ".jeedom::version()." sur ".trim(shell_exec("lsb_release -d -s")).'/'.trim(shell_exec('dpkg --print-architecture')).'/'.trim(shell_exec('arch')).'/'.trim(shell_exec('getconf LONG_BIT'))." aka '".jeedom::getHardwareName()."' avec nodeJS ".trim(shell_exec('node -v'))." et jsonrpc:".config::byKey('api::core::jsonrpc::mode', 'core', 'enable')." et homebridge ".$ver);
+		$CommunityInfo="```\n== Jeedom ".jeedom::version()." sur ".trim(shell_exec("lsb_release -d -s")).'/'.trim(shell_exec('dpkg --print-architecture')).'/'.trim(shell_exec('arch')).'/'.trim(shell_exec('getconf LONG_BIT'))."bits aka '".jeedom::getHardwareName()."' avec nodeJS ".trim(shell_exec('node -v'))." et jsonrpc:".config::byKey('api::core::jsonrpc::mode', 'core', 'enable')." et ".__CLASS__." (".$conf['version'].") ".$ver." (avant:".config::byKey('previousVersion',__CLASS__,'inconnu',true).")\n```";
+		return $CommunityInfo;
+	}
 
-	public static function event() {
+	public static function event($data) {
 		$changed=false;
-		$eventType = init('eventType');
+		$eventType = $data['eventType'];
 		log::add('HomeWizard', 'debug', __("Passage dans la fonction event ", __FILE__) . $eventType);
 		if ($eventType == 'error'){
-			log::add('HomeWizard', 'error', init('description'));
+			log::add('HomeWizard', 'error', $data['description']);
 			return;
 		}
 		
 		switch ($eventType) {
 			case 'createEq':
-				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode(init('mdns')));
-				$mdns = init('mdns');
+				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode($data['mdns']));
+				$mdns = $data['mdns'];
 				/*{
 				  ip: '192.168.1.100',
 				  hostname: 'p1meter-ABABAB.local',
@@ -55,10 +64,11 @@ class HomeWizard extends eqLogic {
 					serial: 'abcdserial',
 					product_type: 'HWE-P1',
 					product_name: 'P1 meter'
-				  }
+				  },
+      				  "firmware_version":"5.16"
 				}*/
 				$eq = [
-					"name"=>$mdns['txt']['product_name'],
+					"name"=>$mdns['txt']['product_name'].'_'.$mdns['txt']['serial'],
 					"logicalId"=>$mdns['txt']['product_type'].'_'.$mdns['txt']['serial'],
 					"enable"=>1,
 					"visible"=>1,
@@ -67,32 +77,16 @@ class HomeWizard extends eqLogic {
 						"hostname"=>$mdns['hostname'],
 						"type"=>$mdns['txt']['product_type'],
 						"serial"=>$mdns['txt']['serial'],
+						"firmware_version"=>$mdns['firmware_version'],
 					]
 				];
 				self::createEq($eq);
 			break;
-			case 'createEqwithoutEvent':
-				log::add('HomeWizard', 'info', __("Mise à jour de :", __FILE__).json_encode(init('mdns')));
-				$mdns = init('mdns');
-
-				$eq = [
-					"name"=>$mdns['txt']['product_name'],
-					"logicalId"=>$mdns['txt']['product_type'].'_'.$mdns['txt']['serial'],
-					"configuration"=>[
-						"address"=>$mdns['ip'],
-						"hostname"=>$mdns['hostname'],
-						"type"=>$mdns['txt']['product_type'],
-						"serial"=>$mdns['txt']['serial'],
-					]
-				];
-				self::createEq($eq,false);
-			break;
 			case 'updateValue':
-				//log::add('HomeWizard', 'debug', 'updateValue :'.init('id').' '.init('aidiid').' '.init('value'));
-				$logical=init('id');
+				$logical=$data['id'];
 				$eqp = eqlogic::byLogicalId($logical,'HomeWizard');
 				if (is_object($eqp)){
-					$val=init('value');
+					$val=$data['value'];
 					log::add('HomeWizard','debug',json_encode($val));
 					$hasNewCmd=false;
 					foreach($val as $key=>$value) {
@@ -101,30 +95,89 @@ class HomeWizard extends eqLogic {
 							$keyPart=explode('_',$key);
 							$unite='';
 							if(count($keyPart) >2) {
-								$unite = $keyPart[count($keyPart)];
-								if($unite=='timestamp') {$unite='';}
-							}	
+								$unite = $keyPart[count($keyPart)-1];
+								switch($unite) {
+									case 'timestamp':
+										$unite='';
+									break;
+									case 'factor':
+										$unite='';
+									break;
+									case 'kwh':
+										$unite="kWh";
+									break;
+									case 'hz':
+										$unite="Hz";
+									break;
+									default:
+										$unite=strtoupper($unite);
+									break;
+								}
+							}
 							$cmd=[
 								"name"=>ucfirst($key),
 								"logicalId"=>$key,
 								"isVisible"=>1,
 								"unite"=>$unite,
 								"type"=>"info",
-								"subtype"=>"numeric"
+								"subtype"=>"numeric",
+								"display"=>[
+                							"forceReturnLineBefore"=>1
+								],
+								"template"=>[
+									"dashboard"=>'line',
+									"mobile"=>'line'
+								]
 							];
-							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model') $cmd['subtype']='other';
+							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp') $cmd['subtype']='string';
+							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
+							if($key == 'brightness') {
+								unset($cmd['template']);
+							}
+							if($key == 'total_power_import_kwh' || $key == 'total_power_export_kwh' || $key == 'active_power_w') {
+								$cmd['template']['dashboard']='tile';
+								$cmd['template']['mobile']='tile';
+							}
 							$hasNewCmd=$eqp->createCmd($cmd);
 						} else {
+							switch($key) {
+								case 'montly_power_peak_timestamp':
+									if (preg_match('/^\d{12}$/', $value)) {
+										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/Y H:i:s');
+									}
+								break;
+								case 'active_tariff':
+									switch($value) {
+										case '1':
+											$txt=__('HP', __FILE__);
+										break;
+										case '2':
+											$txt=__('HC', __FILE__);
+										break;
+										default:
+											$txt=__('Inconnu', __FILE__).'('.$value.')';
+										break;
+									}
+									$eqp->checkAndUpdateCmd('active_tariff_txt',$txt);
+								break;
+							}
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
-					if($hasNewCmd) $eqp->save(true);
+					if($hasNewCmd) $eqp->save();
 				} else {
 					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id = ", __FILE__).$logical);
 				}
 			break;
+			case 'daemonReady':
+				$pollingIntervals 		= config::byKey('pollPeriods', 'HomeWizard', ["HWE-P1"=>0], true);
+				$config=[
+					"pollingIntervals" => $pollingIntervals
+				];
+				HomeWizard::hwConfig('initConfig',["value"=>$config]);
+			break;
 			case 'doPing':
-				$eqp = eqlogic::byLogicalId(init('id'),'HomeWizard');
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getIsEnable() == 1){
 					if ($eqp->pingHost($eqp->getConfiguration('address')) == false) {
 						log::add('HomeWizard', 'debug', __("Offline Réseau : ", __FILE__) . $eqp->getName());
@@ -133,33 +186,83 @@ class HomeWizard extends eqLogic {
 					}
 				}
 			break;
-			case 'removeEquipment':
-				log::add('HomeWizard', 'info', __("Suppression de l'equipement ", __FILE__) . $macAddress );
-				if (is_object($eqp)) {
-				  //Pour être sur de ne pas perdre l'historique c'est l'utilisateur qui doit supprimer manuellement l'equipements
-				  //On flag tous de même l'equipements
-				  $eqp->setConfiguration('toRemove',1);
-				  $eqp->save(true);
-				  //$eqp->remove();
-				  event::add('HomeWizard::excludeDevice', $eqp->getId());
-				}
-			break;
 		}
 	}
 	
 	public static function dependancy_info() {
-		$return = array();
-		$return['progress_file'] = jeedom::getTmpFolder('HomeWizard') . '/dependance';
-		
-		$homewizard_energy_api_folder='resources/node_modules/homewizard-energy-api/package.json';
-		$homewizard_energy_api=dirname(__FILE__).'/../../'.$homewizard_energy_api_folder;
-		
-		$package=json_decode(@file_get_contents($homewizard_energy_api),true);
-		
+		$return = [];
+		$return['log'] = __CLASS__ . '_dep';
+		$return['progress_file'] = jeedom::getTmpFolder(__CLASS__) . '/dependance';
 		$return['state'] = 'nok';
-		if (file_exists($homewizard_energy_api) && version_compare($package['version'],'1.5.0','>=')) {
-			$return['state'] = 'ok';
+
+		// Check if NodeJS exists
+		$nodeJSError=null;
+		$out=null;
+		exec('type node',$out,$nodeJSError);
+		$nodeInstalled=($nodeJSError == 0);
+		if(!$nodeInstalled) {		
+			return $return;
 		}
+
+		// Don't check anything more if buster to avoid dep reinstall and blocking users
+		if(trim(shell_exec("lsb_release -c -s")) == "buster" && strtotime(date("Y-m-d")) > strtotime("2024-06-30")) {
+			$return['state'] = 'ok';
+			return $return;
+		}
+
+		// Get package.json
+		$packageRequiredVers = file_get_contents(dirname(__FILE__) . '/../../resources/package.json');
+		$packageRequiredVers = json_decode($packageRequiredVers,true);
+
+		// Check if NodeJS version is greater or equal the required version
+		$nodeVer=trim(shell_exec('node -v'),"v\n\r");
+		if(!$nodeVer) {$nodeVer='';}
+		preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $packageRequiredVers['engines']['node'], $matches);
+		$nodeOperator = $matches[1] ?: '==';
+		$nodeVersion = $matches[2];
+		
+		$nodeVersionOK=version_compare($nodeVer,$nodeVersion,$nodeOperator);
+		if(!$nodeVersionOK) {
+			return $return;
+		}
+
+		// Check if NPM version is greater or equal the required version
+		$npmVer=trim(shell_exec('npm -v'),"\n\r");
+		if(!$npmVer) {$npmVer='';}
+		preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $packageRequiredVers['engines']['npm'], $matches);
+		$npmOperator = $matches[1] ?: '==';
+		$npmVersion = $matches[2];
+		
+		$npmVersionOK=version_compare($npmVer,$npmVersion,$npmOperator);
+		if(!$npmVersionOK) {
+			return $return;
+		}
+
+		// Check if jeedom connect class is present
+		if(!file_exists(dirname(__FILE__) . '/../../resources/utils/jeedom.js')) {
+			return $return;
+		}
+
+		// Check if all dependancies of hap-controller are installed and have the required version
+		foreach($packageRequiredVers['dependencies'] as $dep => $requiredVersionSpec) {
+		    $depPackageJson = file_get_contents(dirname(__FILE__) . '/../../resources/node_modules/' . $dep . '/package.json');
+		    if (!$depPackageJson) {
+		        return $return;
+		    }
+		
+		    $depDetails = json_decode($depPackageJson, true);
+		    $installedVersion = $depDetails['version'];
+		
+		    preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $requiredVersionSpec, $matches);
+		    $requiredOperator = $matches[1] ?: '==';
+		    $requiredVersion = $matches[2];
+		
+		    if (!version_compare($installedVersion, $requiredVersion, $requiredOperator)) {
+		        return $return;
+		    }
+		}
+		
+		$return['state'] = 'ok';
 		return $return;
 	}
 
@@ -187,8 +290,7 @@ class HomeWizard extends eqLogic {
 		return $return;
 	}
 	
-	public static function reinstallNodeJS()
-	{ // Reinstall NODEJS from scratch (to use if there is errors in dependancy install)
+	public static function reinstallNodeJS() { // Reinstall NODEJS from scratch (to use if there is errors in dependancy install)
 		$pluginHomeWizard = plugin::byId('HomeWizard');
 		log::add('HomeWizard', 'info', __("Suppression du Code NodeJS", __FILE__));
 		$cmd = system::getCmdSudo() . 'rm -rf ' . dirname(__FILE__) . '/../../resources/node_modules &>/dev/null';
@@ -261,25 +363,37 @@ class HomeWizard extends eqLogic {
 	}
 
 	public static function deamon_stop() {
-		log::add('HomeWizard', 'info', __("Arrêt du démon HomeWizard", __FILE__));
-		$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
-		//@file_get_contents($url);
-		$request_http = new com_http($url);
-		$request_http->setNoReportError(true);
-		$request_http->exec(11,1);
-		sleep(5);
-		
-		$pid = exec("ps -eo pid,command | grep 'resources/HomeWizard.js' | grep -v grep | awk '{print $1}'");
-		if($pid) {
-			exec('echo '.$pid.' | xargs '.system::getCmdSudo().'kill > /dev/null 2>&1');
-			log::add('HomeWizard', 'info', __("Arrêt SIGHUP du démon HomeWizard", __FILE__));
-			sleep(3);
-		}
-		
-		$pid = exec("ps -eo pid,command | grep 'resources/HomeWizard.js' | grep -v grep | awk '{print $1}'");
-		if($pid) {
-			exec('echo '.$pid.' | xargs '.system::getCmdSudo().'kill -9 > /dev/null 2>&1');
-			log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+		$deamon_info = self::deamon_info();
+		if ($deamon_info['state'] == 'ok') {
+			log::add('HomeWizard', 'info', __("Arrêt du démon HomeWizard", __FILE__));
+			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
+			$request_http = new com_http($url);
+			$request_http->setNoReportError(true);
+			$request_http->exec(11,1);
+			for ($retry = 0; $retry < 5; $retry++) {
+				if (self::deamon_info()['state'] != 'ok') { 
+					return true;
+				}
+				sleep(1);
+			}
+			
+			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+			if($pid) {
+				exec(system::getCmdSudo().'kill -15 ' . $pid.' > /dev/null 2>&1');
+				log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+				for ($retry = 0; $retry < 3; $retry++) {
+					if (self::deamon_info()['state'] != 'ok') { 
+						return true;
+					}
+					sleep(1);
+				}
+			}
+			
+			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+			if($pid) {
+				exec(system::getCmdSudo().'kill -9 ' . $pid.' > /dev/null 2>&1');
+				log::add('HomeWizard', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
+			}
 		}
 	}	
 	
@@ -335,7 +449,7 @@ class HomeWizard extends eqLogic {
 				foreach($eq['configuration'] as $c => $v) {
 					$eqp->setConfiguration($c, $v);
 				}
-				$eqp->save(true);
+				$eqp->save();
 			} else {
 				log::add('HomeWizard', 'warning', __("Etrange l'équipement ", __FILE__) . $eq['name'] .'('. $eq['logicalId'] . __(") n'a pas de nom... vérifiez qu'il est bien appairé : ", __FILE__).json_encode($eq));
 			}
@@ -366,6 +480,36 @@ class HomeWizard extends eqLogic {
 			if($json === '') log::add('HomeWizard','debug',__("Le démon n'a rien répondu à la demande : ", __FILE__).$url);
 			log::add('HomeWizard','debug',ucfirst($cmd).' brut : '.$json);
 			return json_decode($json, true);
+		}
+	}
+	
+	public static function hwConfig($setting, $params = []) {
+		if ($setting) {
+			$daemonState = HomeWizard::deamon_info();
+			if ($daemonState['state'] != 'ok') {
+				return false;
+			}
+			log::add('HomeWizard', 'debug', __("Configuration", __FILE__). ' ' . ucfirst($setting) . '...');
+			$url = "http://" . config::byKey('internalAddr') . ":" . config::byKey('socketport', 'HomeWizard') . "/";
+			$url .= 'config?setting=' . $setting . ((count($params)) ? "&" . http_build_query($params) : '');
+			try {
+				//$json = file_get_contents($url);
+				$request_http = new com_http($url);
+				$result = $request_http->exec(60, 1);
+				$json = json_decode($result, true);
+			} catch(Exception $e) {
+				log::add('HomeWizard', 'warning', __('Problème de communication avec le démon à la demande :', __FILE__) . $url . ' Exception : ' . $e);
+			} catch(Error $e) {
+				log::add('HomeWizard', 'warning', __('Problème de communication avec le démon à la demande :', __FILE__) . $url . ' Error : ' . $e);
+			}
+			if ($json === null) {
+				log::add('HomeWizard', 'debug', __("Le démon n'a rien répondu à la demande :", __FILE__) . $url);
+			}
+			if ($json['result'] != 'ok') {
+				log::add('HomeWizard', 'debug', __("Erreur du démon :", __FILE__) . $json['msg']);
+			}
+			log::add('HomeWizard', 'debug', ucfirst($setting) . ' brut : ' . $result);
+			return $json['value'];
 		}
 	}
 	
@@ -424,12 +568,14 @@ class HomeWizard extends eqLogic {
 			$newCmd->setName(__($cmd['name'], __FILE__));
 			$newCmd->setEqLogic_id($this->getId());
 		} else {
-			log::add('HomeWizard','debug',__("Modification commande ", __FILE__).$cmd['name']);
+			log::add('HomeWizard','debug',__("Modification commande ", __FILE__).(($cmd['name'])?$cmd['name']:$cmd['logicalId']));
 		}
 		if(isset($cmd['unite'])) {
 			$newCmd->setUnite( $cmd['unite'] );
 		}
-		$newCmd->setType($cmd['type']);
+		if(isset($cmd['type'])) {
+			$newCmd->setType($cmd['type']);
+		}
 		if(isset($cmd['configuration'])) {
 			foreach($cmd['configuration'] as $configuration_type=>$configuration_value) {
 				$newCmd->setConfiguration($configuration_type, $configuration_value);
@@ -446,7 +592,9 @@ class HomeWizard extends eqLogic {
 				$newCmd->setDisplay($display_type, $display_value);
 			}
 		}
-		$newCmd->setSubType($cmd['subtype']);
+		if(isset($cmd['subtype'])) {
+			$newCmd->setSubType($cmd['subtype']);
+		}
 		if($cmd['type'] == 'action' && isset($cmd['value'])) {
 			$linkStatus = $this->getCmd(null, $cmd['value']);
 			if(is_object($linkStatus))
@@ -469,7 +617,7 @@ class HomeWizard extends eqLogic {
 		return false;
 	}	
 
-	public function preSave() {
+	public function postSave() {
 		$online=$this->getCmd(null, 'online');
 		if(!is_object($online)) {
 			$cmd=[
@@ -478,13 +626,38 @@ class HomeWizard extends eqLogic {
 				"type"=>"info",
 				"subtype"=>"binary",
 				"display"=> [
-					"generic_type"=>"ONLINE"
+					"generic_type"=>"ONLINE",
+					"forceReturnLineBefore"=>1
 				],
 				"isVisible"=>1,
 				"isHistorized"=>1
 			];
-			$this->createCmd($cmd);
-			$this->pingHost($this->getConfiguration('address'));
+			$this->createCmd($cmd);	
+		}
+		$this->pingHost($this->getConfiguration('address'));
+
+		$type = $this->getConfiguration('type');
+		$eqConfig = 'plugins/HomeWizard/core/config/'.$type.'.json';
+		$base = dirname(__FILE__) . '/../../../../';
+		if(file_exists($base.$eqConfig)) {
+			$content = file_get_contents($base.$eqConfig);
+			if($content) {
+				$content=translate::exec($content,realpath($base.$eqConfig));
+			}
+			$extraConfig=json_decode($content,true);
+			foreach($extraConfig['modifyCommands'] as $cmdModif) {
+				$existCmd = $this->getCmd(null, $cmdModif['logicalId']);
+				if (is_object($existCmd)) {
+					$this->createCmd($cmdModif);
+				}
+			}
+
+			foreach($extraConfig['additionnalCommands'] as $cmdConfig) {
+				$cmdToCreate=$this->getCmd(null, $cmdConfig['logicalId']);
+				if(!is_object($cmdToCreate)) {
+					$this->createCmd($cmdConfig);
+				}
+			}
 		}
 	}
 }
@@ -506,10 +679,7 @@ class HomeWizardCmd extends cmd {
 		$result=null;
 
 		$eqLogical=$eqLogic->getLogicalId();
-		$partLogical=explode('_',$eqLogical);
-		if(isset($partLogical[1])) {
-			$eqLogical=$partLogical[0];
-		}
+
 		
 		$daemonState=HomeWizard::deamon_info();
 		if($daemonState['state'] != 'ok') {
@@ -518,50 +688,55 @@ class HomeWizardCmd extends cmd {
 		}
 
 		switch ($logical) {
-			case 'refresh' :
-				HomeWizard::hwExecute('getAccessories',['id'=>$eqLogical]);
+			case 'action_power_on' :
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'power_on','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
-			case 'identify':
-				HomeWizard::hwExecute('identify',['id'=>$eqLogical,'char'=>$this->getConfiguration('aidiid')]);
+			case 'action_power_off':
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'power_off','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_lock' :
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'lock','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_unlock':
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'unlock','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_brightness' :
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'brightness','id'=>$eqLogical,'val'=>$_options['slider']]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_identify' :
+				$result = HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
+				if($result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
 			break;
 			default:
-				$subtype=$this->getSubtype();
-				
-				//if message or slider or color
-				if(is_array($_options) && isset($_options[$subtype])) {
-					$val=$_options[$subtype];
-				} else { // if bool
-					$val=$this->getConfiguration('valueToSet');
-				}
-				$aidiids=$this->getConfiguration('aidiid');
-				
-				if(strpos($aidiids,'|') !== false && $subtype=='color') {
-					$aidiids=explode('|',$aidiids);
-					$val=homekitUtils::HTMLtoHS($val);
-					$aidiids=[
-						[$aidiids[0],$val[0]],
-						[$aidiids[1],$val[1]]
-					];
-				} else {
-					$aidiids=[[$aidiids,$val]];
-				}
-				//$params=[];
-				foreach($aidiids as $elmt) {
-					$c=explode('.',$elmt[0]);
-					//array_push($params,
-					$params=[
-						'id'=>$eqLogical,
-						'aid'=>$c[0],
-						'iid'=>$c[1],
-						'val'=>$elmt[1]
-					];
-					log::add('HomeWizard','info',__("Action à envoyer au démon : ", __FILE__).$this->getName().'('.$eqLogical.')('.$elmt[0].')->'.$elmt[1]);
-					HomeWizard::hwExecute('setAccessories',$params);
-				}
-				//log::add('HomeWizard','debug','Action à envoyer au démon : '.$this->getName().'('.$eqLogical.')('.$elmt[0].')->'.$elmt[1].' '.json_encode($params));
-				//HomeWizard::hwExecute('setAccessories',$params);
+				log::add('HomeWizard','error',__("Commande", __FILE__).' '.$logical.' '.__("inconnue", __FILE__));
+				return false;
 			break;
 		}
+		log::add('HomeWizard','info',__("Résultat de la commande OK", __FILE__));
+		return true;
 		//log::add('HomeWizard','debug',$logical);
 
 		//$eqLogic->getHomeWizardInfo(null,null,$hasToCheckPlaying);
