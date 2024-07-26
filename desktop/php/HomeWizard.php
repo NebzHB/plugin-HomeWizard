@@ -29,6 +29,16 @@ $eqLogics = eqLogic::byType('HomeWizard');
 				</br />
 				<span>{{Santé}}</span>
 			</div>
+			<?php
+			$jeedomVersion=jeedom::version() ?? '0';
+			$displayInfo=version_compare($jeedomVersion, '4.4.0', '>=');
+			if($displayInfo){
+				echo '<div class="cursor eqLogicAction warning" data-action="createCommunityPost" title="{{Ouvrir une demande d\'aide sur le forum communautaire}}">';
+				echo '<div class="center"><i class="fas fa-ambulance"></i></div>';
+				echo '<span>{{Community}}</span>';
+				echo '</div>';
+			}
+			?>
 		</div>
 		<legend><i class="fab fa-apple"></i>  {{Mes Equipements HomeWizard}}</legend>
 		<div class="input-group" style="margin-bottom:5px;">
