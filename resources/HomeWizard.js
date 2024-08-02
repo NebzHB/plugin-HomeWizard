@@ -338,7 +338,3 @@ process.on('SIGTERM', function() {
 	Logger.log("Recu SIGTERM",LogType.DEBUG);
 	myCommands.stop();
 });
-process.on('SIGKILL', function() {
-	Logger.log("Recu SIGKILL",LogType.DEBUG);
-	myCommands.stop();
-});
