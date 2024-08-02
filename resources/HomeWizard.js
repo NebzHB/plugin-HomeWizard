@@ -213,13 +213,13 @@ function startStateInterval(index) {
 			const state = await conn[index].getState();
 			eventReceived(index,state);
 		} catch(error) {
+			clearInterval(intervals[index]);
+			delete intervals[index];
 			if(error.toString().includes("TimeoutError")) {
 				Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
 			} else {
 				Logger.log(index+' (getState) : '+error,LogType.ERROR);
 			}
-			clearInterval(intervals[index]);
-			delete intervals[index];
 		}
     }, conf.pollingIntervals["HWE-SKT_state"]);
 }
@@ -288,10 +288,6 @@ function discover() {
 			}
 			try {
 				conn[index].polling.getData.stop();
-				if(intervals[index]) {
-					clearInterval(intervals[index]);
-					delete intervals[index];
-				}
 				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
 				jsend({eventType: 'doPing', id: index});
 				delete conn[index];
