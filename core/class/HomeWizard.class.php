@@ -28,7 +28,7 @@ class HomeWizard extends eqLogic {
 		foreach($eqLogics as $HomeWizard) {
 			if ($HomeWizard->getIsEnable() == 0) continue;
 			if ($HomeWizard->pingHost($HomeWizard->getConfiguration('address')) == true) continue;
-			log::add('HomeWizard', 'debug', __("Offline Réseau : ", __FILE__) . $HomeWizard->getName());
+			log::add('HomeWizard', 'debug', __("Offline Réseau", __FILE__) .': '. $HomeWizard->getName());
 		}
 	}
 	public static function getConfigForCommunity()
@@ -44,7 +44,7 @@ class HomeWizard extends eqLogic {
 	public static function event($data) {
 		$changed=false;
 		$eventType = $data['eventType'];
-		log::add('HomeWizard', 'debug', __("Passage dans la fonction event ", __FILE__) . $eventType);
+		log::add('HomeWizard', 'debug', __("Passage dans la fonction event", __FILE__) .' '. $eventType);
 		if ($eventType == 'error'){
 			log::add('HomeWizard', 'error', $data['description']);
 			return;
@@ -52,7 +52,7 @@ class HomeWizard extends eqLogic {
 		
 		switch ($eventType) {
 			case 'createEq':
-				log::add('HomeWizard', 'info', __("Découverte de :", __FILE__).json_encode($data['mdns']));
+				log::add('HomeWizard', 'info', __("Découverte de", __FILE__).': '.json_encode($data['mdns']));
 				$mdns = $data['mdns'];
 				/*{
 				  ip: '192.168.1.100',
@@ -149,13 +149,13 @@ class HomeWizard extends eqLogic {
 								case 'active_tariff':
 									switch($value) {
 										case '1':
-											$txt=__('HP', __FILE__);
+											$txt=__("HP", __FILE__);
 										break;
 										case '2':
-											$txt=__('HC', __FILE__);
+											$txt=__("HC", __FILE__);
 										break;
 										default:
-											$txt=__('Inconnu', __FILE__).'('.$value.')';
+											$txt=__("Inconnu", __FILE__).'('.$value.')';
 										break;
 									}
 									$eqp->checkAndUpdateCmd('active_tariff_txt',$txt);
@@ -166,11 +166,11 @@ class HomeWizard extends eqLogic {
 					}
 					if($hasNewCmd) $eqp->save();
 				} else {
-					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id = ", __FILE__).$logical);
+					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id", __FILE__).' '.$logical);
 				}
 			break;
 			case 'daemonReady':
-				$pollingIntervals 		= config::byKey('pollPeriods', 'HomeWizard', ["HWE-P1"=>0], true);
+				$pollingIntervals = config::byKey('pollPeriods', 'HomeWizard', ["HWE-P1"=>0], true);
 				$config=[
 					"pollingIntervals" => $pollingIntervals
 				];
@@ -180,9 +180,9 @@ class HomeWizard extends eqLogic {
 				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getIsEnable() == 1){
 					if ($eqp->pingHost($eqp->getConfiguration('address')) == false) {
-						log::add('HomeWizard', 'debug', __("Offline Réseau : ", __FILE__) . $eqp->getName());
+						log::add('HomeWizard', 'debug', __("Offline Réseau", __FILE__) .': '. $eqp->getName());
 					} else {
-						log::add('HomeWizard', 'debug', __("Online Réseau : ", __FILE__) . $eqp->getName());
+						log::add('HomeWizard', 'debug', __("Online Réseau", __FILE__) .': '. $eqp->getName());
 					}
 				}
 			break;
@@ -273,7 +273,7 @@ class HomeWizard extends eqLogic {
 		$ver=$update->getLocalVersion();
 		$conf=$update->getConfiguration();
 		//log::add(__CLASS__,'debug',"Installation dépendances sur Jeedom ".jeedom::version()." sur ".trim(shell_exec("lsb_release -d -s")).'/'.trim(shell_exec('dpkg --print-architecture')).'/'.trim(shell_exec('arch')).'/'.trim(shell_exec('getconf LONG_BIT'))." aka '".jeedom::getHardwareName()."' avec nodeJS ".trim(shell_exec('node -v'))." et jsonrpc:".config::byKey('api::core::jsonrpc::mode', 'core', 'enable')." et homebridge ".$ver);
-		shell_exec('echo "'."== Jeedom ".jeedom::version()." sur ".trim(shell_exec("lsb_release -d -s")).'/'.trim(shell_exec('dpkg --print-architecture')).'/'.trim(shell_exec('arch')).'/'.trim(shell_exec('getconf LONG_BIT'))."bits aka '".jeedom::getHardwareName()."' avec nodeJS ".trim(shell_exec('node -v'))." et jsonrpc:".config::byKey('api::core::jsonrpc::mode', 'core', 'enable')." et ".__CLASS__." (".$conf['version'].") ".$ver." (avant:".config::byKey('previousVersion',__CLASS__,'inconnu',true).')" >> '.log::getPathToLog(__CLASS__ . '_dep'));
+		shell_exec('echo "'."== Jeedom ".jeedom::version().' '.__("sur",__FILE__).' '.trim(shell_exec("lsb_release -d -s")).'/'.trim(shell_exec('dpkg --print-architecture')).'/'.trim(shell_exec('arch')).'/'.trim(shell_exec('getconf LONG_BIT'))."bits aka '".jeedom::getHardwareName()."' ".__("avec nodeJS",__FILE__).' '.trim(shell_exec('node -v')).' '.__("et",__FILE__).' jsonrpc:'.config::byKey('api::core::jsonrpc::mode', 'core', 'enable').' '.__("et",__FILE__).' '.__CLASS__." (".$conf['version'].") ".$ver.' ('.__("avant",__FILE__).':'.config::byKey('previousVersion',__CLASS__,__("inconnu",__FILE__),true).')" >> '.log::getPathToLog(__CLASS__ . '_dep'));
 		
 		return array('script' => dirname(__FILE__) . '/../../resources/install_#stype#.sh' , 'log' => log::getPathToLog(__CLASS__ . '_dep'));
 	}
@@ -337,7 +337,7 @@ class HomeWizard extends eqLogic {
 		$deamonPath = realpath(dirname(__FILE__) . '/../../resources');
 		$cmd = 'nice -n 19 node '.$inspect.' ' . $deamonPath . '/HomeWizard.js ' . $url . ' ' . jeedom::getApiKey('HomeWizard') .' '. $socketport . ' ' . $logLevel;
 
-		log::add('HomeWizard', 'debug', __("Lancement démon HomeWizard : ", __FILE__) . $cmd);
+		log::add('HomeWizard', 'debug', __("Lancement du démon HomeWizard", __FILE__).': '.$cmd);
 
 		$result = exec((($logLevel=='debug')?$debugMsg:'NODE_ENV=production ').'nohup ' . $cmd . ' >> ' . log::getPathToLog('HomeWizard_deamon') . ' 2>&1 &');
 		if (strpos(strtolower($result), 'error') !== false || strpos(strtolower($result), 'traceback') !== false) {
@@ -426,9 +426,9 @@ class HomeWizard extends eqLogic {
 				if(HomeWizard::nameExists($eq['name'],null)) {
 					$name=$eq['name'];
 					$eq['name']=$eq['name'].'_'.$eq['logicalId'];
-					log::add('HomeWizard', 'debug', __("Nom en double ", __FILE__) . $name . __(" renommé en ", __FILE__) . $eq['name']);
+					log::add('HomeWizard', 'debug', __("Nom en double", __FILE__) .' '. $name .' '. __("renommé en", __FILE__) .' '. $eq['name']);
 				}
-				log::add('HomeWizard', 'info', __("Création de l'équipement ", __FILE__) . $eq['name'] .'('. $eq['logicalId'] . ')');
+				log::add('HomeWizard', 'info', __("Création de l'équipement", __FILE__) .' '. $eq['name'] .'('. $eq['logicalId'] . ')');
 				$eqp = new HomeWizard();
 				$eqp->setEqType_name('HomeWizard');
 				$eqp->setLogicalId($eq['logicalId']);
@@ -441,17 +441,17 @@ class HomeWizard extends eqLogic {
 				$eqp->save(true);
 				if($event) event::add('HomeWizard::includeDevice');
 			} else {
-				log::add('HomeWizard', 'warning', __("Etrange l'équipement ", __FILE__) . $eq['name'] .'('. $eq['logicalId'] . __(") n'a pas de nom... vérifiez qu'il est bien appairé : ", __FILE__).json_encode($eq));
+				log::add('HomeWizard', 'warning', __("Etrange, l'équipement", __FILE__) .' '. $eq['name'] .'('. $eq['logicalId'] .') '. __("n'a pas de nom... vérifiez qu'il est bien appairé !", __FILE__).' : '.json_encode($eq));
 			}
 		} else {
 			if($eq['name']) {
-				log::add('HomeWizard', 'info', __("Modification de l'équipement ", __FILE__) . $eq['name'] .'('. $eq['logicalId'] . ')');	
+				log::add('HomeWizard', 'info', __("Modification de l'équipement", __FILE__) .' '. $eq['name'] .'('. $eq['logicalId'] . ')');	
 				foreach($eq['configuration'] as $c => $v) {
 					$eqp->setConfiguration($c, $v);
 				}
 				$eqp->save();
 			} else {
-				log::add('HomeWizard', 'warning', __("Etrange l'équipement ", __FILE__) . $eq['name'] .'('. $eq['logicalId'] . __(") n'a pas de nom... vérifiez qu'il est bien appairé : ", __FILE__).json_encode($eq));
+				log::add('HomeWizard', 'warning', __("Etrange, l'équipement", __FILE__) .' '. $eq['name'] .'('. $eq['logicalId'] .') '. __("n'a pas de nom... vérifiez qu'il est bien appairé !", __FILE__).' : '.json_encode($eq));
 			}
 		}
 		return $eqp;
@@ -473,12 +473,12 @@ class HomeWizard extends eqLogic {
 				$request_http = new com_http($url);
 				$json=$request_http->exec(90,1);
 			} catch( Exception $e) {
-				log::add('HomeWizard','error',__("Problème de communication avec le démon à la demande ", __FILE__).$url. ' Exception : '.$e);
+				log::add('HomeWizard','error',__("Problème de communication avec le démon à la demande", __FILE__).' '.$url. ' Exception : '.$e);
 			} catch( Error $e) {
-				log::add('HomeWizard','error',__("Problème de communication avec le démon à la demande ", __FILE__).$url. ' Error : '.$e);
+				log::add('HomeWizard','error',__("Problème de communication avec le démon à la demande", __FILE__).' '.$url. ' Error : '.$e);
 			}
-			if($json === '') log::add('HomeWizard','debug',__("Le démon n'a rien répondu à la demande : ", __FILE__).$url);
-			log::add('HomeWizard','debug',ucfirst($cmd).' brut : '.$json);
+			if($json === '') log::add('HomeWizard','debug',__("Le démon n'a rien répondu à la demande", __FILE__).': '.$url);
+			log::add('HomeWizard','debug',ucfirst($cmd).' '.__("brut",__FILE__).': '.$json);
 			return json_decode($json, true);
 		}
 	}
@@ -498,17 +498,17 @@ class HomeWizard extends eqLogic {
 				$result = $request_http->exec(60, 1);
 				$json = json_decode($result, true);
 			} catch(Exception $e) {
-				log::add('HomeWizard', 'warning', __('Problème de communication avec le démon à la demande :', __FILE__) . $url . ' Exception : ' . $e);
+				log::add('HomeWizard', 'warning', __("Problème de communication avec le démon à la demande", __FILE__).' :'. $url . ' Exception : ' . $e);
 			} catch(Error $e) {
-				log::add('HomeWizard', 'warning', __('Problème de communication avec le démon à la demande :', __FILE__) . $url . ' Error : ' . $e);
+				log::add('HomeWizard', 'warning', __("Problème de communication avec le démon à la demande", __FILE__).' :'. $url . ' Error : ' . $e);
 			}
 			if ($json === null) {
-				log::add('HomeWizard', 'debug', __("Le démon n'a rien répondu à la demande :", __FILE__) . $url);
+				log::add('HomeWizard', 'debug', __("Le démon n'a rien répondu à la demande", __FILE__).' :'. $url);
 			}
 			if ($json['result'] != 'ok') {
-				log::add('HomeWizard', 'debug', __("Erreur du démon :", __FILE__) . $json['msg']);
+				log::add('HomeWizard', 'debug', __("Erreur du démon", __FILE__) .': '. $json['msg']);
 			}
-			log::add('HomeWizard', 'debug', ucfirst($setting) . ' brut : ' . $result);
+			log::add('HomeWizard', 'debug', ucfirst($setting) . ' '. __("brut", __FILE__) . ': ' . $result);
 			return $json['value'];
 		}
 	}
@@ -552,7 +552,7 @@ class HomeWizard extends eqLogic {
 		$newCmd = $this->getCmd(null, $cmd['logicalId']);
 		if (!is_object($newCmd)) {
 			$isNew=true;
-			log::add('HomeWizard','info',__("Création commande ", __FILE__).$order.':'.$cmd['name']);
+			log::add('HomeWizard','info',__("Création commande", __FILE__).' '.$order.':'.$cmd['name']);
 			$newCmd = new HomeWizardCmd();
 			$newCmd->setLogicalId($cmd['logicalId']);
 			$newCmd->setIsVisible($cmd['isVisible']);
@@ -568,7 +568,7 @@ class HomeWizard extends eqLogic {
 			$newCmd->setName(__($cmd['name'], __FILE__));
 			$newCmd->setEqLogic_id($this->getId());
 		} else {
-			log::add('HomeWizard','debug',__("Modification commande ", __FILE__).(($cmd['name'])?$cmd['name']:$cmd['logicalId']));
+			log::add('HomeWizard','debug',__("Modification commande", __FILE__).' '.(($cmd['name'])?$cmd['name']:$cmd['logicalId']));
 		}
 		if(isset($cmd['unite'])) {
 			$newCmd->setUnite( $cmd['unite'] );
@@ -683,7 +683,7 @@ class HomeWizardCmd extends cmd {
 		
 		$daemonState=HomeWizard::deamon_info();
 		if($daemonState['state'] != 'ok') {
-			log::add('HomeWizard','error',__("Le démon doit être démarré pour lancer la commande", __FILE__));
+			log::add('HomeWizard','error',__("Le démon doit être démarré pour lancer la commande", __FILE__).' '.$logical);
 			return false;
 		}
 
@@ -691,47 +691,47 @@ class HomeWizardCmd extends cmd {
 			case 'action_power_on' :
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'power_on','id'=>$eqLogical]);
 				if($result['result']==='ko') {
-					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
 					return false;
 				}
 			break;
 			case 'action_power_off':
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'power_off','id'=>$eqLogical]);
 				if($result['result']==='ko') {
-					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
 					return false;
 				}
 			break;
 			case 'action_lock' :
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'lock','id'=>$eqLogical]);
 				if($result['result']==='ko') {
-					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
 					return false;
 				}
 			break;
 			case 'action_unlock':
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'unlock','id'=>$eqLogical]);
 				if($result['result']==='ko') {
-					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
 					return false;
 				}
 			break;
 			case 'action_brightness' :
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'brightness','id'=>$eqLogical,'val'=>$_options['slider']]);
 				if($result['result']==='ko') {
-					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
 					return false;
 				}
 			break;
 			case 'action_identify' :
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
 				if($result['result']==='ko') {
-					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).' : '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
 					return false;
 				}
 			break;
 			default:
-				log::add('HomeWizard','error',__("Commande", __FILE__).' '.$logical.' '.__("inconnue", __FILE__));
+				log::add('HomeWizard','error',__("Commande inconnue", __FILE__).': '.$logical);
 				return false;
 			break;
 		}
