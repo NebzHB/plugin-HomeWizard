@@ -21,6 +21,20 @@
 	"link": {
 		"forum": "https://community.jeedom.com/tags/plugin-HomeWizard"
 	},
-	"languages": ["fr_FR","en_US"],
-	"compatibility": ["smart","rpi","diy","v4"]
+	"languages": [
+		"fr_FR",
+		"en_US"
+	],
+	"compatibility": [
+		"smart",
+		"rpi",
+		"diy",
+		"v4"
+	],
+	"language": [
+		"fr_FR",
+		"en_US",
+		"es_ES",
+		"de_DE"
+	]
 }
