@@ -1,0 +1,56 @@
+{
+    "plugins\/HomeWizard\/core\/ajax\/HomeWizard.ajax.php": {
+        "401 - Accès non autorisé": "401 - Acceso no autorizado"
+    },
+    "plugins\/HomeWizard\/core\/api\/HomeWizard.api.php": {},
+    "plugins\/HomeWizard\/core\/class\/HomeWizard.class.php": {
+        "Configuration": "Configuración ",
+        "Inconnu": "Desconocido",
+        "et": "y"
+    },
+    "plugins\/HomeWizard\/core\/config\/HWE-P1.json": {},
+    "plugins\/HomeWizard\/core\/config\/HWE-SKT.json": {
+        "Eteindre": "Apagar",
+        "Verrouiller": "Cerrar"
+    },
+    "plugins\/HomeWizard\/desktop\/js\/HomeWizard.js": {
+        "Afficher": "Mostrar",
+        "Historiser": "Guardar historial",
+        "Tester": "Probar",
+        "Valeur": "Valor"
+    },
+    "plugins\/HomeWizard\/desktop\/modal\/health.php": {
+        "Adresse": "Dirección",
+        "ID": "IDENTIFICACIÓN",
+        "Inconnu": "Desconocido",
+        "OK": "Bueno",
+        "Type": "Tipo"
+    },
+    "plugins\/HomeWizard\/desktop\/php\/HomeWizard.php": {
+        "401 - Accès non autorisé": "401 - Acceso no autorizado",
+        "Action": "Acción",
+        "Activer": "Activar",
+        "Aucun": "Ninguno",
+        "Catégorie": "Categoría",
+        "Commandes": "Comandos",
+        "Configuration": "Configuración ",
+        "Configuration avancée": "Configuración avanzada",
+        "Equipement": "Dispositivos",
+        "Gestion": "Administración",
+        "Nom": "Nombre",
+        "Objet parent": "Objeto padre",
+        "Ouvrir une demande d\\'aide sur le forum communautaire": "Abrir una solicitud de ayuda en el foro de la comunidad",
+        "Rechercher": "Buscar",
+        "Santé": "Salud",
+        "Sauvegarder": "Para salvaguardar",
+        "Supprimer": "Eliminar",
+        "Type": "Tipo",
+        "Valeur": "Valor",
+        "Valeurs possibles": "Valores posibles"
+    },
+    "plugins\/HomeWizard\/plugin_info\/configuration.php": {
+        "Configuration": "Configuración "
+    },
+    "plugins\/HomeWizard\/plugin_info\/info.json": {},
+    "plugins\/HomeWizard\/plugin_info\/pre_install.php": {}
+}
