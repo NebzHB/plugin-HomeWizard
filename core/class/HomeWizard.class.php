@@ -405,6 +405,9 @@ class HomeWizard extends eqLogic {
 		try {
 			$file = $path . '/' . $device.'.json';
 			$content = file_get_contents($file);
+			if($content) {
+				$content=translate::exec($content,realpath($file));
+			}
 			$return = json_decode($content, true);
 		} catch (Exception $e) {
 			return false;
