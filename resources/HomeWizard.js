@@ -213,13 +213,13 @@ function startStateInterval(index) {
 			const state = await conn[index].getState();
 			eventReceived(index,state);
 		} catch(error) {
+			clearInterval(intervals[index]);
+			delete intervals[index];
 			if(error.toString().includes("TimeoutError")) {
 				Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
 			} else {
 				Logger.log(index+' (getState) : '+error,LogType.ERROR);
 			}
-			clearInterval(intervals[index]);
-			delete intervals[index];
 		}
     }, conf.pollingIntervals["HWE-SKT_state"]);
 }
@@ -288,10 +288,6 @@ function discover() {
 			}
 			try {
 				conn[index].polling.getData.stop();
-				if(intervals[index]) {
-					clearInterval(intervals[index]);
-					delete intervals[index];
-				}
 				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
 				jsend({eventType: 'doPing', id: index});
 				delete conn[index];
@@ -331,25 +327,9 @@ function eventReceived(who,ev) {
 }
 
 
-
-
 /** 
 	UTILS
 **/
-Promise.delay = function(t, val) {
-    return new Promise((resolve) => {
-        setTimeout(resolve.bind(null, val), t);
-    });
-};
-
-
-Promise.raceAll = function(promises, timeoutTime, timeoutVal) {
-    return Promise.all(promises.map((p) => {
-        return Promise.race([p, Promise.delay(timeoutTime, timeoutVal)]);
-    }));
-};
-
-
 process.on('SIGHUP', function() {
 	Logger.log("Recu SIGHUP",LogType.DEBUG);
 	myCommands.stop();
