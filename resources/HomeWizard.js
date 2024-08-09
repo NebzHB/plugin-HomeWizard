@@ -326,7 +326,11 @@ function discover() {
 
 function eventReceived(who,ev) {
 	const w=who.split('_');
-	Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.INFO);
+	if(conf.logLevel=='debug') {
+		Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.DEBUG);
+	} else if(conf.logLevel=='info') {
+		Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0],LogType.INFO);
+	}
 	jsend({eventType: 'updateValue', id: who, value: ev});
 }
 
