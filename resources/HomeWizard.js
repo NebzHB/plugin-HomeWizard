@@ -287,9 +287,13 @@ function discover() {
 				Logger.log(index+' (getData) : '+error,LogType.ERROR);
 			}
 			try {
+				Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
 				conn[index].polling.getData.stop();
+				Logger.log(index+' (getData) : Remove from mdns cache...',LogType.DEBUG);
 				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
+				Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
 				jsend({eventType: 'doPing', id: index});
+				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
 				delete conn[index];
 			} catch(e){
 				// Don't need to do anything
@@ -322,7 +326,11 @@ function discover() {
 
 function eventReceived(who,ev) {
 	const w=who.split('_');
-	Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.INFO);
+	if(conf.logLevel=='debug') {
+		Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.DEBUG);
+	} else if(conf.logLevel=='info') {
+		Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0],LogType.INFO);
+	}
 	jsend({eventType: 'updateValue', id: who, value: ev});
 }
 
