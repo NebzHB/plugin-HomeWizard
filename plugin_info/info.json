@@ -21,9 +21,11 @@
 	"link": {
 		"forum": "https://community.jeedom.com/tags/plugin-HomeWizard"
 	},
-	"language": [
-		"fr_FR",
-		"en_US"
+	"languages": [
+		"de_DE",
+		"en_US",
+		"es_ES",
+		"fr_FR"
 	],
 	"compatibility": [
 		"smart",
