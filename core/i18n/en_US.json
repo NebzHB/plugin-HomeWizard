@@ -125,7 +125,5 @@
         "Réinstallation NodeJS effectuée, merci de patienter jusqu'à la fin de l'installation des dépendances": "NodeJS reinstallation done, thank you to wait until the end of the dependencies",
         "Réparation de NodeJS": "Repair of NodeJS",
         "Réparations": "Repairs"
-    },
-    "plugins\/HomeWizard\/plugin_info\/info.json": {},
-    "plugins\/HomeWizard\/plugin_info\/pre_install.php": {}
+    }
 }
