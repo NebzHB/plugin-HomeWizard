@@ -4,9 +4,9 @@ module.exports = {
     'commonjs': true,
     'es6': true,
     'es2021': true,
-    'jasmine': true,
-    'jest': true,
-    'mocha': true,
+    'jasmine': false,
+    'jest': false,
+    'mocha': false,
     'node': true
   },
   'extends': 'eslint:recommended',
