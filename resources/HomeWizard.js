@@ -3,7 +3,7 @@
 const HW = require('homewizard-energy-api');
 const LogType = require('./utils/logger.js').logType;
 const Logger = require('./utils/logger.js').getInstance();
-const express = require('express');
+const express = require('express');;
 
 
 Logger.setLogLevel(LogType.DEBUG);
