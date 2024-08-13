@@ -16,5 +16,6 @@
   "dependencies": {
   },
   "devDependencies": {
+        "eslint": "^8.57.0"
   }
 }
