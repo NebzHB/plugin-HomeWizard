@@ -3,14 +3,15 @@ module.exports = {
     'browser': false,
     'commonjs': true,
     'es6': true,
+    'es2021': true,
     'jasmine': true,
     'jest': true,
     'mocha': true,
     'node': true
   },
   'extends': 'eslint:recommended',
-  'parser': '@babel/eslint-parser',
   'parserOptions': {
+    'ecmaVersion': 2021,
     'sourceType': 'module',
     'requireConfigFile': false
   },
