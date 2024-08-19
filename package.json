@@ -6,7 +6,6 @@
   "scripts": {
     "lint:js": "eslint resources/*.js",
     "lint": "npm run lint:js",
-    "prestart": "cd resources && npm install",
     "start": "node resources/HomeWizard.js url api 1555 debug"
   },
   "repository": {
