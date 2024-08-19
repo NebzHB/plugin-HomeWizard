@@ -5,7 +5,8 @@
   "main": "resources/HoweWizard.js",
   "scripts": {
     "lint:js": "eslint resources/*.js",
-    "lint": "npm run lint:js"
+    "lint": "npm run lint:js",
+    "start": "node reousrces/HomeWizard.js url api 1555 debug"
   },
   "repository": {
     "type": "git",
