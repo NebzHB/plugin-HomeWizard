@@ -6,7 +6,7 @@
   "scripts": {
     "lint:js": "eslint resources/*.js",
     "lint": "npm run lint:js",
-    "start": "node resources/HomeWizard.js url api 1555 debug"
+    "start": "node resources/HomeWizard.js testURL api 1555 debug"
   },
   "repository": {
     "type": "git",
