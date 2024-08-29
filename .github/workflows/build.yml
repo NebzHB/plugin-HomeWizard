@@ -2,9 +2,9 @@ name: PHP8.3
 
 on:
   push:
-    branches: [ beta ]
+    branches: [ beta,master,alpha ]
   pull_request:
-    branches: [ beta ]
+    branches: [ beta,master,alpha ]
 
 jobs:
   build:
