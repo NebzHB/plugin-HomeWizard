@@ -267,11 +267,11 @@ function discover() {
 			break;
 			case "SDM230-wifi": // kWh meter (1 phase)
 			case "HWE-KWH1":
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+				conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
 			break;
 			case "SDM630-wifi": // kWh meter (3 phases)
 			case "HWE-KWH3":
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+				conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
 			break;
 			default:
 				Logger.log("Equipement inconnu",LogType.WARNING);
