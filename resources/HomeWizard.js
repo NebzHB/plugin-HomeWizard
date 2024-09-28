@@ -274,8 +274,8 @@ function discover() {
 				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
 			break;
 			default:
-				Logger.log("Equipement inconnu : "+JSON.stringify(mdns, null, 4),LogType.WARNING);
-				return;
+				Logger.log("Equipement inconnu",LogType.WARNING);
+				return false;
 			break;
 		}
 		
