@@ -275,8 +275,7 @@ function discover() {
 			break;
 			default:
 				Logger.log("Equipement inconnu",LogType.WARNING);
-				return false;
-			break;
+				return;
 		}
 		
 		const basic = await conn[index].getBasicInformation();
