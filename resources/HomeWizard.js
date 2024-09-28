@@ -16,6 +16,8 @@ const pollingIntervalsDefaults={
 	"HWE-WTR":5000,
 	"SDM230-wifi":5000,
 	"SDM630-wifi":5000,
+	"HWE-KWH1":5000,
+	"HWE-KWH3":5000,
 };
 
 
@@ -264,11 +266,16 @@ function discover() {
 				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
 			break;
 			case "SDM230-wifi": // kWh meter (1 phase)
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+			case "HWE-KWH1":
+				conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
 			break;
 			case "SDM630-wifi": // kWh meter (3 phases)
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+			case "HWE-KWH3":
+				conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
 			break;
+			default:
+				Logger.log("Equipement inconnu",LogType.WARNING);
+				return;
 		}
 		
 		const basic = await conn[index].getBasicInformation();
