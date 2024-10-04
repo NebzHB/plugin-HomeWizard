@@ -293,17 +293,20 @@ function discover() {
 			} else {
 				Logger.log(index+' (getData) : '+error,LogType.ERROR);
 			}
-			try {
+			if(conn[index] && conn[index].mdns) {
 				Logger.log(index+' (getData) : Remove from mdns cache...',LogType.DEBUG);
 				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
-				Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
-				jsend({eventType: 'doPing', id: index});
+			}
+			Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
+			jsend({eventType: 'doPing', id: index});
+			try {
 				Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
 				conn[index].polling.getData.stop();
-				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
-				delete conn[index];
 			} catch(e){
 				// Don't need to do anything
+			} finally {
+				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
+				delete conn[index];
 			}
 		});
 
