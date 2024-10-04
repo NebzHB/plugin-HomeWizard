@@ -307,6 +307,9 @@ function discover() {
 			} finally {
 				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
 				delete conn[index];
+				Logger.log(index+' (getData) : Restart Discovery...',LogType.DEBUG);
+				discovery.stop();
+				discovery.start();
 			}
 		});
 
