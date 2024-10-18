@@ -10,9 +10,9 @@
         "JSONRPC object not defined": "Objeto JSONRPC no definido"
     },
     "plugins\/HomeWizard\/core\/class\/HomeWizard.class.php": {
-        "Arrêt SIGKILL du démon HomeWizard": "Detención de SIGKILL en el demonio HomeWizard",
-        "Arrêt SIGTERM du démon HomeWizard": "Detener SIGTERM del demonio HomeWizard",
-        "Arrêt du démon HomeWizard": "Detención del demonio HomeWizard",
+        "Arrêt SIGKILL du démon": "Detener al demonio SIGKILL",
+        "Arrêt SIGTERM du démon": "Detener el demonio SIGTERM",
+        "Arrêt du démon": "Detener demonio",
         "Aucun équipement trouvé avec l'id": "No se ha encontrado ningún equipo con la identificación",
         "Commande inconnue": "Comando desconocido",
         "Configuration": "Configuración ",
@@ -26,7 +26,7 @@
         "HP": "HP",
         "Impossible de lancer le démon HomeWizard, relancer le démon en debug et vérifiez le log": "Imposible iniciar el demonio HomeWizard, reiniciar el demonio en modo de depuración y comprobar el registro",
         "Inconnu": "Desconocido",
-        "Lancement du démon HomeWizard": "Inicio del demonio HomeWizard",
+        "Lancement du démon": "Iniciar el demonio",
         "Le démon doit être démarré pour lancer la commande": "El demonio debe iniciarse para ejecutar el comando",
         "Le démon n'a rien répondu à la demande": "El demonio no respondió a la petición",
         "Modification commande": "Modificación de pedidos",
