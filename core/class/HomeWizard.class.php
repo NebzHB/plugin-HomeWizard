@@ -279,16 +279,16 @@ class HomeWizard extends eqLogic {
 	}
 	
 	public static function reinstallNodeJS() { // Reinstall NODEJS from scratch (to use if there is errors in dependancy install)
-		$pluginHomeWizard = plugin::byId('HomeWizard');
-		log::add('HomeWizard', 'info', __("Suppression du Code NodeJS", __FILE__));
+		$thisPlugin = plugin::byId(__CLASS__);
+		log::add(__CLASS__, 'info', __("Suppression du Code NodeJS", __FILE__));
 		$cmd = system::getCmdSudo() . 'rm -rf ' . dirname(__FILE__) . '/../../resources/node_modules &>/dev/null';
-		log::add('HomeWizard', 'info', __("Suppression de NodeJS", __FILE__));
+		log::add(__CLASS__, 'info', __("Suppression de NodeJS", __FILE__));
 		$cmd = system::getCmdSudo() . 'apt-get -y --purge autoremove npm';
 		exec($cmd);
 		$cmd = system::getCmdSudo() . 'apt-get -y --purge autoremove nodejs';
 		exec($cmd);
-		log::add('HomeWizard', 'info', __("Réinstallation des dependances", __FILE__));
-		$pluginHomeWizard->dependancy_install();
+		log::add(__CLASS__, 'info', __("Réinstallation des dependances", __FILE__));
+		$thisPlugin->dependancy_install();
 		return true;
 	}
 	
@@ -302,7 +302,7 @@ class HomeWizard extends eqLogic {
 				$freePortFound = true;
 			}
 		}
-		config::save('socketport',$port,'HomeWizard');
+		config::save('socketport',$port,__CLASS__);
 		return $port;
 	}
 
@@ -338,14 +338,14 @@ class HomeWizard extends eqLogic {
 		$socketport = self::getFreePort();
 		$url  = network::getNetworkAccess('internal').'/core/api/jeeApi.php' ;
 
-		$logLevel = log::convertLogLevel(log::getLogLevel('HomeWizard'));
+		$logLevel = log::convertLogLevel(log::getLogLevel(__CLASS__));
 		$debugMsg='';
 		$inspect=' --inspect=0.0.0.0:9229 ';
 		$inspect='';
 		$deamonPath = realpath(dirname(__FILE__) . '/../../resources');
 		$cmd = 'nice -n 19 node '.$inspect.' ' . $deamonPath . '/HomeWizard.js ' . $url . ' ' . jeedom::getApiKey(__CLASS__) .' '. $socketport . ' ' . jeedom::getTmpFolder(__CLASS__).'/daemon.pid'. ' ' . $logLevel;
 
-		log::add('HomeWizard', 'debug', __("Lancement du démon", __FILE__).' '.__CLASS__.': '.$cmd);
+		log::add(__CLASS__, 'debug', __("Lancement du démon", __FILE__).' '.__CLASS__.': '.$cmd);
 
 		$result = exec((($logLevel=='debug')?$debugMsg:'NODE_ENV=production ').'nohup ' . $cmd . ' >> ' . log::getPathToLog(__CLASS__.'_deamon') . ' 2>&1 &');
 		if (strpos(strtolower($result), 'error') !== false || strpos(strtolower($result), 'traceback') !== false) {
@@ -361,11 +361,11 @@ class HomeWizard extends eqLogic {
 			$i++;
 		}
 		if ($i >= 30) {
-			log::add('HomeWizard', 'error', __("Impossible de lancer le démon HomeWizard, relancer le démon en debug et vérifiez le log", __FILE__), 'unableStartDeamon');
+			log::add(__CLASS__, 'error', __("Impossible de lancer le démon HomeWizard, relancer le démon en debug et vérifiez le log", __FILE__), 'unableStartDeamon');
 			return false;
 		}
-		message::removeAll('HomeWizard', 'unableStartDeamon');
-		log::add('HomeWizard', 'info', __("Démon HomeWizard lancé", __FILE__));
+		message::removeAll(__CLASS__, 'unableStartDeamon');
+		log::add(__CLASS__, 'info', __("Démon HomeWizard lancé", __FILE__));
 		return true;
 
 	}
@@ -373,8 +373,8 @@ class HomeWizard extends eqLogic {
 	public static function deamon_stop() {
 		$deamon_info = self::deamon_info();
 		if ($deamon_info['state'] == 'ok') {
-			log::add('HomeWizard', 'info', __("Arrêt du démon HomeWizard", __FILE__));
-			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
+			log::add(__CLASS__, 'info', __("Arrêt du démon", __FILE__).' '.__CLASS__);
+			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', __CLASS__)."/stop";
 			$request_http = new com_http($url);
 			$request_http->setNoReportError(true);
 			$request_http->exec(11,1);
@@ -388,7 +388,7 @@ class HomeWizard extends eqLogic {
 			$pid_file = jeedom::getTmpFolder(__CLASS__).'/daemon.pid';
 			if(file_exists($pid_file)) {
 				$pid = intval(trim(file_get_contents($pid_file)));
-				log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon HomeWizard", __FILE__));
+				log::add(__CLASS__, 'info', __("Arrêt SIGTERM du démon", __FILE__).' '.__CLASS__);
 				system::kill($pid);
 				for ($retry = 0; $retry < 3; $retry++) {
 					if (self::deamon_info()['state'] != 'ok') { 
@@ -400,7 +400,7 @@ class HomeWizard extends eqLogic {
 			
 			if(file_exists($pid_file)) {
 				$pid = intval(trim(file_get_contents($pid_file)));
-				log::add('HomeWizard', 'info', __("Arrêt SIGKILL du démon HomeWizard", __FILE__));
+				log::add(__CLASS__, 'info', __("Arrêt SIGKILL du démon", __FILE__).' '.__CLASS__);
 				system::kill($pid,true);
 			}
 		}
