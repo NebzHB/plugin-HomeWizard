@@ -4,7 +4,7 @@ const HW = require('homewizard-energy-api');
 const LogType = require('./utils/logger.js').logType;
 const Logger = require('./utils/logger.js').getInstance();
 const express = require('express');
-
+const fs = require('fs');
 
 Logger.setLogLevel(LogType.DEBUG);
 const conf={};
@@ -30,7 +30,8 @@ process.argv.forEach(function(val, index) {
 		case 2: conf.urlJeedom = val; break;
 		case 3: conf.apiKey = val; break;
 		case 4: conf.serverPort = val; break;
-		case 5:
+		case 5: conf.pid = val; break;
+		case 6:
 			conf.logLevel = val;
 			if (conf.logLevel == 'debug') {Logger.setLogLevel(LogType.DEBUG);}
 			else if (conf.logLevel == 'info') {Logger.setLogLevel(LogType.INFO);}
@@ -40,6 +41,8 @@ process.argv.forEach(function(val, index) {
 	}
 });
 
+// write PID
+fs.writeFile(conf.pid, process.pid.toString(), () => {});
 
 const jsend = require('./utils/jeedom.js')('HomeWizard',conf.urlJeedom,conf.apiKey,conf.logLevel,'jsonrpc');
 
