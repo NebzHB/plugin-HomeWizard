@@ -244,7 +244,7 @@ function discover() {
 	discovery.on('response', async (mdns) => {
 		const type=mdns.txt.product_type;
 		Logger.log("Découverte de : "+JSON.stringify(mdns, null, 4),LogType.DEBUG);
-		if(mdns.txt.api_enabled == 0) {Logger.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
+		if(mdns.txt.api_enabled == 0) {console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
 
 		const index=type+'_'+mdns.txt.serial;
 		
