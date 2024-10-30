@@ -310,10 +310,11 @@ function discover() {
 			} finally {
 				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
 				delete conn[index];
-				Logger.log(index+' (getData) : Restart Discovery...',LogType.DEBUG);
+				Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
 				discovery.stop();
 				setTimeout(() => {
-				    discovery.start();
+					Logger.log(index+' (getData) : Starting Discovery...',LogType.DEBUG);
+				    	discovery.start();
 				},5000);
 			}
 		});
