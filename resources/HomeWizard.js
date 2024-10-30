@@ -312,7 +312,9 @@ function discover() {
 				delete conn[index];
 				Logger.log(index+' (getData) : Restart Discovery...',LogType.DEBUG);
 				discovery.stop();
-				discovery.start();
+				setTimeout(() => {
+				    discovery.start();
+				},5000);
 			}
 		});
 
