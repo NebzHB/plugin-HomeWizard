@@ -314,7 +314,7 @@ function discover() {
 				discovery.stop();
 				setTimeout(() => {
 					Logger.log(index+' (getData) : Starting Discovery...',LogType.DEBUG);
-				    discover();
+					discover();
 				},5000);
 			}
 		});
