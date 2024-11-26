@@ -280,7 +280,7 @@ function discover() {
 				Logger.log("Equipement inconnu",LogType.WARNING);
 				return;
 		}
-		
+
 		if (conn[index]) {
 			
 			const basic = await conn[index].getBasicInformation();
@@ -320,7 +320,7 @@ function discover() {
 					},5000);
 				}
 			});
-	        }
+		}
 		/* {
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
