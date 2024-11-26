@@ -281,44 +281,46 @@ function discover() {
 				return;
 		}
 		
-		const basic = await conn[index].getBasicInformation();
-		mdns.firmware_version=basic.firmware_version;
-		
-		conn[index].mdns=mdns;
-		jsend({eventType: 'createEq', id: index, mdns: mdns});
-		conn[index].polling.getData.start();
-		conn[index].polling.getData.on('response', (response) => {
-			eventReceived(index,response);
-		});
-		conn[index].polling.getData.on('error', (error) => {
-			if(error.toString().includes("TimeoutError")) {
-				Logger.log(index+' (getData) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
-			} else {
-				Logger.log(index+' (getData) : '+error,LogType.ERROR);
-			}
-			if(conn[index] && conn[index].mdns) {
-				Logger.log(index+' (getData) : Remove from mdns cache...',LogType.DEBUG);
-				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
-			}
-			Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
-			jsend({eventType: 'doPing', id: index});
-			try {
-				Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
-				conn[index].polling.getData.stop();
-			} catch(e){
-				// Don't need to do anything
-			} finally {
-				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
-				delete conn[index];
-				Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
-				discovery.stop();
-				setTimeout(() => {
-					Logger.log(index+' (getData) : Starting Discovery...',LogType.DEBUG);
-					discover();
-				},5000);
-			}
-		});
-
+		if (conn[index]) {
+			
+			const basic = await conn[index].getBasicInformation();
+			mdns.firmware_version=basic.firmware_version;
+			      	
+			conn[index].mdns=mdns;
+			jsend({eventType: 'createEq', id: index, mdns: mdns});
+			conn[index].polling.getData.start();
+			conn[index].polling.getData.on('response', (response) => {
+				eventReceived(index,response);
+			});
+			conn[index].polling.getData.on('error', (error) => {
+				if(error.toString().includes("TimeoutError")) {
+					Logger.log(index+' (getData) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
+				} else {
+					Logger.log(index+' (getData) : '+error,LogType.ERROR);
+				}
+				if(conn[index] && conn[index].mdns) {
+					Logger.log(index+' (getData) : Remove from mdns cache...',LogType.DEBUG);
+					discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
+				}
+				Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
+				jsend({eventType: 'doPing', id: index});
+				try {
+					Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
+					conn[index].polling.getData.stop();
+				} catch(e){
+					// Don't need to do anything
+				} finally {
+					Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
+					delete conn[index];
+					Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
+					discovery.stop();
+					setTimeout(() => {
+						Logger.log(index+' (getData) : Starting Discovery...',LogType.DEBUG);
+						discover();
+					},5000);
+				}
+			});
+	        }
 		/* {
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
