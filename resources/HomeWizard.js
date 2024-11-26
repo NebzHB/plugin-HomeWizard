@@ -285,7 +285,7 @@ function discover() {
 			
 			const basic = await conn[index].getBasicInformation();
 			mdns.firmware_version=basic.firmware_version;
-			      	
+
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
 			conn[index].polling.getData.start();
