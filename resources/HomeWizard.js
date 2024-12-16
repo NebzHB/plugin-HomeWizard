@@ -285,7 +285,7 @@ function discover() {
 			
 			const basic = await conn[index].getBasicInformation();
 			mdns.firmware_version=basic.firmware_version;
-			      	
+			
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
 			conn[index].polling.getData.start();
@@ -320,18 +320,18 @@ function discover() {
 					},5000);
 				}
 			});
-	        }
+			}
 		/* {
-		  ip: '192.168.1.100',
-		  hostname: 'p1meter-ABABAB.local',
-		  fqdn: 'p1meter-ABABAB._hwenergy._tcp.local',
-		  txt: {
-			api_enabled: '1',
-			path: '/api/v1',
-			serial: 'abcdserial',
-			product_type: 'HWE-P1',
-			product_name: 'P1 meter'
-		  }
+			ip: '192.168.1.100',
+			hostname: 'p1meter-ABABAB.local',
+			fqdn: 'p1meter-ABABAB._hwenergy._tcp.local',
+			txt: {
+				api_enabled: '1',
+				path: '/api/v1',
+				serial: 'abcdserial',
+				product_type: 'HWE-P1',
+				product_name: 'P1 meter'
+			}
 		} */
 
 	});
