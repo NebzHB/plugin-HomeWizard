@@ -380,7 +380,7 @@ class HomeWizard extends eqLogic {
 			$request_http->exec(11,1);
 			for ($retry = 0; $retry < 5; $retry++) {
 				if (self::deamon_info()['state'] != 'ok') {
-					HomeWizard::delPIDfile()
+					HomeWizard::delPIDfile();
 					return true;
 				}
 				sleep(1);
@@ -392,7 +392,7 @@ class HomeWizard extends eqLogic {
 				log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon", __FILE__).' '.'HomeWizard');
 				for ($retry = 0; $retry < 3; $retry++) {
 					if (self::deamon_info()['state'] != 'ok') { 
-						HomeWizard::delPIDfile()
+						HomeWizard::delPIDfile();
 						return true;
 					}
 					sleep(1);
@@ -403,7 +403,7 @@ class HomeWizard extends eqLogic {
 			if($pid) {
 				system::kill($pid,true);
 				log::add('HomeWizard', 'info', __("Arrêt SIGKILL du démon", __FILE__).' '.'HomeWizard');
-				HomeWizard::delPIDfile()
+				HomeWizard::delPIDfile();
 			}
 		}
 	}	
