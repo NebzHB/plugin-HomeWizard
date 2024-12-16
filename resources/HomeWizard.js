@@ -280,12 +280,12 @@ function discover() {
 				Logger.log("Equipement inconnu",LogType.WARNING);
 				return;
 		}
-
+		
 		if (conn[index]) {
 			
 			const basic = await conn[index].getBasicInformation();
 			mdns.firmware_version=basic.firmware_version;
-
+			      	
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
 			conn[index].polling.getData.start();
@@ -320,7 +320,7 @@ function discover() {
 					},5000);
 				}
 			});
-		}
+	        }
 		/* {
 		  ip: '192.168.1.100',
 		  hostname: 'p1meter-ABABAB.local',
