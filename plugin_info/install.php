@@ -19,9 +19,9 @@
 require_once dirname(__FILE__) . '/../../../core/php/core.inc.php';
 
 function HomeWizard_update() {
-if (file_exists(dirname(__FILE__) . '/../core/i18n/fr_FR.json')) {
-	@unlink(dirname(__FILE__) . '/../core/i18n/fr_FR.json');
-}
+	if (file_exists(dirname(__FILE__) . '/../core/i18n/fr_FR.json')) {
+		@unlink(dirname(__FILE__) . '/../core/i18n/fr_FR.json');
+	}
 }
 
 ?>
