@@ -239,7 +239,6 @@ const server = app.listen(conf.serverPort, () => {
 });
 
 function discover() {	
-
 	discovery.start();
 	
 	discovery.on('response', async (mdns) => {
@@ -260,22 +259,22 @@ function discover() {
 		};
 		switch(type) {
 			case "HWE-P1": // P1 Meter
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+				if(!conn[index]) {conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);}
 			break;
 			case "HWE-SKT": // Energy Socket
-				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+				if(!conn[index]) {conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);}
 				startStateInterval(index);
 			break;
 			case "HWE-WTR": // Watermeter (only on USB)
-				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
+				if(!conn[index]) {conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);}
 			break;
 			case "SDM230-wifi": // kWh meter (1 phase)
 			case "HWE-KWH1":
-				conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
+				if(!conn[index]) {conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);}
 			break;
 			case "SDM630-wifi": // kWh meter (3 phases)
 			case "HWE-KWH3":
-				conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
+				if(!conn[index]) {conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);}
 			break;
 			default:
 				Logger.log("Equipement inconnu",LogType.WARNING);
@@ -289,8 +288,9 @@ function discover() {
 			
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
-			conn[index].polling.getData.start();
+			conn[index].polling.getData.stop();
 			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
+			conn[index].polling.getData.start();
 			conn[index].polling.getData.on('response', (response) => {
 				eventReceived(index,response);
 			});
@@ -313,7 +313,7 @@ function discover() {
 					// Don't need to do anything
 				} finally {
 					Logger.log(index+' (getData) : Remove response event & error event...',LogType.DEBUG);
-					conn[index].polling.getData.on('response',() => {}).removeAllListeners();
+					conn[index].polling.getData.on('error',() => {}).removeAllListeners();
 					Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
 					delete conn[index];
 					Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
