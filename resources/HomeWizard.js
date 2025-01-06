@@ -213,7 +213,8 @@ app.use(function(err, req, res, _next) {
 
 
 function startStateInterval(index) {
-    intervals[index] = setInterval(async () => {
+	if(intervals[index]) {clearInterval(intervals[index]);};
+	intervals[index] = setInterval(async () => {
 		try {
 			const state = await conn[index].getState();
 			eventReceived(index,state);
@@ -226,7 +227,7 @@ function startStateInterval(index) {
 				Logger.log(index+' (getState) : '+error,LogType.ERROR);
 			}
 		}
-    }, conf.pollingIntervals["HWE-SKT_state"]);
+	}, conf.pollingIntervals["HWE-SKT_state"]);
 }
 
 
