@@ -257,6 +257,12 @@ function discover() {
 				method: console.log
 			} */
 		};
+		// if already exists but with different ip, delete previous object.
+		if(conn[index] && conn[index].polling.getData && conn[index].mdns.ip != mdns.ip) {
+			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
+			conn[index].polling.getData.stop();
+			delete conn[index]
+		}
 		switch(type) {
 			case "HWE-P1": // P1 Meter
 				if(!conn[index]) {conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);}
@@ -288,8 +294,8 @@ function discover() {
 			
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
-			conn[index].polling.getData.stop();
 			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
+			conn[index].polling.getData.stop();
 			conn[index].polling.getData.start();
 			conn[index].polling.getData.on('response', (response) => {
 				eventReceived(index,response);
@@ -306,14 +312,14 @@ function discover() {
 				}
 				Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
 				jsend({eventType: 'doPing', id: index});
+				Logger.log(index+' (getData) : Remove response event & error event...',LogType.DEBUG);
+				conn[index].polling.getData.on('error',() => {}).removeAllListeners();
 				try {
 					Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
 					conn[index].polling.getData.stop();
 				} catch(e){
 					// Don't need to do anything
 				} finally {
-					Logger.log(index+' (getData) : Remove response event & error event...',LogType.DEBUG);
-					conn[index].polling.getData.on('error',() => {}).removeAllListeners();
 					Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
 					delete conn[index];
 					Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
