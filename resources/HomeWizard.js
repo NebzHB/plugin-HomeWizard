@@ -311,7 +311,7 @@ function discover() {
 					// Don't need to do anything
 				} finally {
 					Logger.log(index+' (getData) : Remove response event & error event...',LogType.DEBUG);
-					conn[index].polling.getData.on('response').removeAllListeners();
+					conn[index].polling.getData.on('response',() => {}).removeAllListeners();
 					Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
 					delete conn[index];
 					Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
