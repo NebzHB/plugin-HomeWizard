@@ -312,8 +312,8 @@ function discover() {
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
 
-			// Logger.log("IsPolling getData à : "+conn[index].isPolling['getData'],LogType.DEBUG);
-			if(!conn[index].isPolling['getData']) {
+			// Logger.log("IsPolling getData à : "+conn[index].isPolling.getData,LogType.DEBUG);
+			if(!conn[index].isPolling.getData) {
 				conn[index].polling.getData.start();
 				conn[index].polling.getData.on('response', (response) => {
 					eventReceived(index,response);
