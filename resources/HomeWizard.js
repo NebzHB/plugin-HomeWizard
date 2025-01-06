@@ -260,28 +260,44 @@ function discover() {
 		};
 		// if already exists but with different ip, delete previous object.
 		if(conn[index] && conn[index].polling.getData && conn[index].mdns.ip != mdns.ip) {
+			Logger.log("Changement d'IP de "+conn[index].mdns.ip+" à "+mdns.ip,LogType.DEBUG);
 			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
 			conn[index].polling.getData.stop();
 			delete conn[index]
 		}
 		switch(type) {
 			case "HWE-P1": // P1 Meter
-				if(!conn[index]) {conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);}
+				if(!conn[index]) {
+					Logger.log("Connexion à : http://"+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+				}
 			break;
 			case "HWE-SKT": // Energy Socket
-				if(!conn[index]) {conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);}
+				if(!conn[index]) {
+					Logger.log("Connexion à : http://"+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+				}
 				startStateInterval(index);
 			break;
 			case "HWE-WTR": // Watermeter (only on USB)
-				if(!conn[index]) {conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);}
+				if(!conn[index]) {
+					Logger.log("Connexion à : http://"+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
+				}
 			break;
 			case "SDM230-wifi": // kWh meter (1 phase)
 			case "HWE-KWH1":
-				if(!conn[index]) {conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);}
+				if(!conn[index]) {
+					Logger.log("Connexion à : http://"+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
+				}
 			break;
 			case "SDM630-wifi": // kWh meter (3 phases)
 			case "HWE-KWH3":
-				if(!conn[index]) {conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);}
+				if(!conn[index]) {
+					Logger.log("Connexion à : http://"+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
+				}
 			break;
 			default:
 				Logger.log("Equipement inconnu",LogType.WARNING);
@@ -295,6 +311,8 @@ function discover() {
 			
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
+
+			Logger.log("IsPolling getData à : "+conn[index].isPolling['getData'],LogType.DEBUG);
 			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
 			conn[index].polling.getData.stop();
 			conn[index].polling.getData.start();
