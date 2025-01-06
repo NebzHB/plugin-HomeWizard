@@ -252,7 +252,7 @@ function discover() {
 		const param={
 			polling: {
 				interval: conf.pollingIntervals[type],
-				stopOnError: false,
+				stopOnError: true,
 			},
 			/* logger: {
 				method: console.log
@@ -313,8 +313,10 @@ function discover() {
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
 
 			Logger.log("IsPolling getData à : "+conn[index].isPolling['getData'],LogType.DEBUG);
-			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
-			conn[index].polling.getData.stop();
+			if(conn[index].isPolling['getData']) {
+				conn[index].polling.getData.on('error', () => {}).removeAllListeners();
+				conn[index].polling.getData.stop();
+			}
 			conn[index].polling.getData.start();
 			conn[index].polling.getData.on('response', (response) => {
 				eventReceived(index,response);
