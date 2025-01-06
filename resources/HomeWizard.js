@@ -289,6 +289,7 @@ function discover() {
 			conn[index].mdns=mdns;
 			jsend({eventType: 'createEq', id: index, mdns: mdns});
 			conn[index].polling.getData.start();
+			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
 			conn[index].polling.getData.on('response', (response) => {
 				eventReceived(index,response);
 			});
