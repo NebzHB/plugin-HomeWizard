@@ -263,7 +263,7 @@ function discover() {
 			Logger.log("Changement d'IP de "+conn[index].mdns.ip+" à "+mdns.ip,LogType.DEBUG);
 			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
 			conn[index].polling.getData.stop();
-			delete conn[index]
+			delete conn[index];
 		}
 		switch(type) {
 			case "HWE-P1": // P1 Meter
