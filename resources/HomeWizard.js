@@ -213,21 +213,22 @@ app.use(function(err, req, res, _next) {
 
 
 function startStateInterval(index) {
-	if(intervals[index]) {clearInterval(intervals[index]);};
-	intervals[index] = setInterval(async () => {
-		try {
-			const state = await conn[index].getState();
-			eventReceived(index,state);
-		} catch(error) {
-			clearInterval(intervals[index]);
-			delete intervals[index];
-			if(error.toString().includes("TimeoutError")) {
-				Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
-			} else {
-				Logger.log(index+' (getState) : '+error,LogType.ERROR);
+	if(!intervals[index]) {
+		intervals[index] = setInterval(async () => {
+			try {
+				const state = await conn[index].getState();
+				eventReceived(index,state);
+			} catch(error) {
+				clearInterval(intervals[index]);
+				delete intervals[index];
+				if(error.toString().includes("TimeoutError")) {
+					Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
+				} else {
+					Logger.log(index+' (getState) : '+error,LogType.ERROR);
+				}
 			}
-		}
-	}, conf.pollingIntervals["HWE-SKT_state"]);
+		}, conf.pollingIntervals["HWE-SKT_state"]);
+	}
 }
 
 
@@ -307,7 +308,7 @@ function discover() {
 					Logger.log(index+' (getData) : '+error,LogType.ERROR);
 				}
 				if(conn[index] && conn[index].mdns) {
-					Logger.log(index+' (getData) : Remove from mdns cache...',LogType.DEBUG);
+					Logger.log(index+' (getData) : Remove '+conn[index].mdns.fqdn+' from mdns cache...',LogType.DEBUG);
 					discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
 				}
 				Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
@@ -347,7 +348,6 @@ function discover() {
 	});
 	discovery.on('error', (error) => {
 		Logger.log("Discovery : "+error,LogType.ERROR);
-		discovery.start();
 	});
 	discovery.on('warning', (error) => {
 		Logger.log("Discovery : "+error,LogType.WARNING);
