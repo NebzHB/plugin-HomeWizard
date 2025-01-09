@@ -33,7 +33,7 @@ $eqLogics = eqLogic::byType('HomeWizard');
 			$jeedomVersion=jeedom::version() ?? '0';
 			$displayInfo=version_compare($jeedomVersion, '4.4.0', '>=');
 			if($displayInfo){
-				echo '<div class="cursor eqLogicAction warning" data-action="createCommunityPost" title="{{Ouvrir une demande d\'aide sur le forum communautaire}}">';
+				echo "<div class=\"cursor eqLogicAction warning\" data-action=\"createCommunityPost\" title=\"{{Ouvrir une demande d'aide sur le forum communautaire}}\">";
 				echo '<i class="fas fa-ambulance"></i><br>';
 				echo '<span>{{Community}}</span>';
 				echo '</div>';

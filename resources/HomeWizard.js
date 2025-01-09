@@ -4,7 +4,7 @@ const HW = require('homewizard-energy-api');
 const LogType = require('./utils/logger.js').logType;
 const Logger = require('./utils/logger.js').getInstance();
 const express = require('express');
-
+const fs = require('fs');
 
 Logger.setLogLevel(LogType.DEBUG);
 const conf={};
@@ -30,7 +30,8 @@ process.argv.forEach(function(val, index) {
 		case 2: conf.urlJeedom = val; break;
 		case 3: conf.apiKey = val; break;
 		case 4: conf.serverPort = val; break;
-		case 5:
+		case 5: conf.pid = val; break;
+		case 6:
 			conf.logLevel = val;
 			if (conf.logLevel == 'debug') {Logger.setLogLevel(LogType.DEBUG);}
 			else if (conf.logLevel == 'info') {Logger.setLogLevel(LogType.INFO);}
@@ -40,6 +41,8 @@ process.argv.forEach(function(val, index) {
 	}
 });
 
+// write PID
+fs.writeFile(conf.pid, process.pid.toString(), () => {});
 
 const jsend = require('./utils/jeedom.js')('HomeWizard',conf.urlJeedom,conf.apiKey,conf.logLevel,'jsonrpc');
 
@@ -210,20 +213,22 @@ app.use(function(err, req, res, _next) {
 
 
 function startStateInterval(index) {
-    intervals[index] = setInterval(async () => {
-		try {
-			const state = await conn[index].getState();
-			eventReceived(index,state);
-		} catch(error) {
-			clearInterval(intervals[index]);
-			delete intervals[index];
-			if(error.toString().includes("TimeoutError")) {
-				Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
-			} else {
-				Logger.log(index+' (getState) : '+error,LogType.ERROR);
+	if(!intervals[index]) {
+		intervals[index] = setInterval(async () => {
+			try {
+				const state = await conn[index].getState();
+				eventReceived(index,state);
+			} catch(error) {
+				clearInterval(intervals[index]);
+				delete intervals[index];
+				if(error.toString().includes("TimeoutError")) {
+					Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
+				} else {
+					Logger.log(index+' (getState) : '+error,LogType.ERROR);
+				}
 			}
-		}
-    }, conf.pollingIntervals["HWE-SKT_state"]);
+		}, conf.pollingIntervals["HWE-SKT_state"]);
+	}
 }
 
 
@@ -235,95 +240,132 @@ const server = app.listen(conf.serverPort, () => {
 });
 
 function discover() {	
-
 	discovery.start();
 	
 	discovery.on('response', async (mdns) => {
 		const type=mdns.txt.product_type;
 		Logger.log("Découverte de : "+JSON.stringify(mdns, null, 4),LogType.DEBUG);
-		if(mdns.txt.api_enabled == 0) {Logger.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
+		if(mdns.txt.api_enabled == 0) {console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
 
 		const index=type+'_'+mdns.txt.serial;
 		
 		const param={
 			polling: {
 				interval: conf.pollingIntervals[type],
-				stopOnError: false,
+				stopOnError: true,
 			},
 			/* logger: {
 				method: console.log
 			} */
 		};
+		// if already exists but with different ip, delete previous object.
+		if(conn[index] && conn[index].polling.getData && conn[index].mdns.ip != mdns.ip) {
+			Logger.log("Changement d'IP de "+conn[index].mdns.ip+" à "+mdns.ip,LogType.DEBUG);
+			conn[index].polling.getData.on('error', () => {}).removeAllListeners();
+			conn[index].polling.getData.stop();
+			delete conn[index];
+		}
 		switch(type) {
 			case "HWE-P1": // P1 Meter
-				conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+				if(!conn[index]) {
+					Logger.log("Connexion à : "+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.P1MeterApi('http://'+mdns.ip, param);
+				}
 			break;
 			case "HWE-SKT": // Energy Socket
-				conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+				if(!conn[index]) {
+					Logger.log("Connexion à : "+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.EnergySocketApi('http://'+mdns.ip, param);
+				}
 				startStateInterval(index);
 			break;
 			case "HWE-WTR": // Watermeter (only on USB)
-				conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
+				if(!conn[index]) {
+					Logger.log("Connexion à : "+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.WaterMeterApi('http://'+mdns.ip, param);
+				}
 			break;
 			case "SDM230-wifi": // kWh meter (1 phase)
 			case "HWE-KWH1":
-				conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
+				if(!conn[index]) {
+					Logger.log("Connexion à : "+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
+				}
 			break;
 			case "SDM630-wifi": // kWh meter (3 phases)
 			case "HWE-KWH3":
-				conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
+				if(!conn[index]) {
+					Logger.log("Connexion à : "+mdns.ip,LogType.DEBUG);
+					conn[index]= new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
+				}
 			break;
 			default:
 				Logger.log("Equipement inconnu",LogType.WARNING);
 				return;
 		}
 		
-		const basic = await conn[index].getBasicInformation();
-		mdns.firmware_version=basic.firmware_version;
-		
-		conn[index].mdns=mdns;
-		jsend({eventType: 'createEq', id: index, mdns: mdns});
-		conn[index].polling.getData.start();
-		conn[index].polling.getData.on('response', (response) => {
-			eventReceived(index,response);
-		});
-		conn[index].polling.getData.on('error', (error) => {
-			if(error.toString().includes("TimeoutError")) {
-				Logger.log(index+' (getData) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
-			} else {
-				Logger.log(index+' (getData) : '+error,LogType.ERROR);
-			}
-			try {
-				Logger.log(index+' (getData) : Remove from mdns cache...',LogType.DEBUG);
-				discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
-				Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
-				jsend({eventType: 'doPing', id: index});
-				Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
-				conn[index].polling.getData.stop();
-				Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
-				delete conn[index];
-			} catch(e){
-				// Don't need to do anything
-			}
-		});
+		if (conn[index]) {
+			
+			const basic = await conn[index].getBasicInformation();
+			mdns.firmware_version=basic.firmware_version;
+			
+			conn[index].mdns=mdns;
+			jsend({eventType: 'createEq', id: index, mdns: mdns});
 
+			// Logger.log("IsPolling getData à : "+conn[index].isPolling.getData,LogType.DEBUG);
+			if(!conn[index].isPolling.getData) {
+				conn[index].polling.getData.start();
+				conn[index].polling.getData.on('response', (response) => {
+					eventReceived(index,response);
+				});
+				conn[index].polling.getData.on('error', (error) => {
+					if(error.toString().includes("TimeoutError")) {
+						Logger.log(index+' (getData) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
+					} else {
+						Logger.log(index+' (getData) : '+error,LogType.ERROR);
+					}
+					if(conn[index] && conn[index].mdns) {
+						Logger.log(index+' (getData) : Remove '+conn[index].mdns.fqdn+' from mdns cache...',LogType.DEBUG);
+						discovery.removeCachedResponseByFqdn(conn[index].mdns.fqdn);
+					}
+					Logger.log(index+' (getData) : Asking Jeedom to ping...',LogType.DEBUG);
+					jsend({eventType: 'doPing', id: index});
+					Logger.log(index+' (getData) : Remove response event & error event...',LogType.DEBUG);
+					conn[index].polling.getData.on('error',() => {}).removeAllListeners();
+					try {
+						Logger.log(index+' (getData) : Stopping...',LogType.DEBUG);
+						conn[index].polling.getData.stop();
+					} catch(e){
+						// Don't need to do anything
+					} finally {
+						Logger.log(index+' (getData) : Delete ref...',LogType.DEBUG);
+						delete conn[index];
+						Logger.log(index+' (getData) : Stopping Discovery...',LogType.DEBUG);
+						discovery.stop();
+						setTimeout(() => {
+							Logger.log(index+' (getData) : Starting Discovery...',LogType.DEBUG);
+							discover();
+						},5000);
+					}
+				});
+			}
+		}
 		/* {
-		  ip: '192.168.1.100',
-		  hostname: 'p1meter-ABABAB.local',
-		  fqdn: 'p1meter-ABABAB._hwenergy._tcp.local',
-		  txt: {
-			api_enabled: '1',
-			path: '/api/v1',
-			serial: 'abcdserial',
-			product_type: 'HWE-P1',
-			product_name: 'P1 meter'
-		  }
+			ip: '192.168.1.100',
+			hostname: 'p1meter-ABABAB.local',
+			fqdn: 'p1meter-ABABAB._hwenergy._tcp.local',
+			txt: {
+				api_enabled: '1',
+				path: '/api/v1',
+				serial: 'abcdserial',
+				product_type: 'HWE-P1',
+				product_name: 'P1 meter'
+			}
 		} */
 
 	});
 	discovery.on('error', (error) => {
 		Logger.log("Discovery : "+error,LogType.ERROR);
-		discovery.start();
 	});
 	discovery.on('warning', (error) => {
 		Logger.log("Discovery : "+error,LogType.WARNING);
