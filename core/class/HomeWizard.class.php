@@ -118,6 +118,7 @@ class HomeWizard extends eqLogic {
 								"name"=>ucfirst($key),
 								"logicalId"=>$key,
 								"isVisible"=>1,
+								"isHistorized"=>0,
 								"unite"=>$unite,
 								"type"=>"info",
 								"subtype"=>"numeric",
@@ -570,6 +571,7 @@ class HomeWizard extends eqLogic {
 			$newCmd = new HomeWizardCmd();
 			$newCmd->setLogicalId($cmd['logicalId']);
 			$newCmd->setIsVisible($cmd['isVisible']);
+			$newCmd->setIsHistorized($cmd['isHistorized']);
 			$newCmd->setOrder($order);
 			
 			$origName=$cmd['name'];
