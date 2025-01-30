@@ -571,7 +571,7 @@ class HomeWizard extends eqLogic {
 			$newCmd = new HomeWizardCmd();
 			$newCmd->setLogicalId($cmd['logicalId']);
 			$newCmd->setIsVisible($cmd['isVisible']);
-			$newCmd->setIsHistorized($cmd['isHistorized']);
+			if($cmd['type'] == 'info' && isset($cmd['isHistorized'])) $newCmd->setIsHistorized($cmd['isHistorized']);
 			$newCmd->setOrder($order);
 			
 			$origName=$cmd['name'];
@@ -587,7 +587,7 @@ class HomeWizard extends eqLogic {
 			log::add('HomeWizard','debug',__("Modification commande", __FILE__).' '.(($cmd['name'])?$cmd['name']:$cmd['logicalId']));
 		}
 		if(isset($cmd['unite'])) {
-			$newCmd->setUnite( $cmd['unite'] );
+			$newCmd->setUnite($cmd['unite']);
 		}
 		if(isset($cmd['type'])) {
 			$newCmd->setType($cmd['type']);
