@@ -109,6 +109,12 @@ class HomeWizard extends eqLogic {
 									case 'hz':
 										$unite="Hz";
 									break;
+									case 'lpm':
+										$unite="L/min";
+									break;
+									case 'm3':
+										$unite="m³";
+									break;
 									default:
 										$unite=strtoupper($unite);
 									break;
