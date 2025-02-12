@@ -40,7 +40,7 @@ $eqLogics = eqLogic::byType('HomeWizard');
 			}
 			?>
 		</div>
-		<legend><i class="fab fa-apple"></i>  {{Mes Equipements HomeWizard}}</legend>
+		<legend><i class="fas fa-bolt"></i>  {{Mes Equipements HomeWizard}}</legend>
 		<div class="input-group" style="margin-bottom:5px;">
 			<input class="form-control roundedLeft" placeholder="{{Rechercher}}" id="in_searchEqlogic1" />
 			<div class="input-group-btn">

@@ -109,6 +109,12 @@ class HomeWizard extends eqLogic {
 									case 'hz':
 										$unite="Hz";
 									break;
+									case 'lpm':
+										$unite="L/min";
+									break;
+									case 'm3':
+										$unite="m³";
+									break;
 									default:
 										$unite=strtoupper($unite);
 									break;
@@ -118,6 +124,7 @@ class HomeWizard extends eqLogic {
 								"name"=>ucfirst($key),
 								"logicalId"=>$key,
 								"isVisible"=>1,
+								"isHistorized"=>0,
 								"unite"=>$unite,
 								"type"=>"info",
 								"subtype"=>"numeric",
@@ -245,7 +252,7 @@ class HomeWizard extends eqLogic {
 
 		// Check if all dependancies of hap-controller are installed and have the required version
 		foreach($packageRequiredVers['dependencies'] as $dep => $requiredVersionSpec) {
-		    $depPackageJson = file_get_contents(dirname(__FILE__) . '/../../resources/node_modules/' . $dep . '/package.json');
+		    $depPackageJson = @file_get_contents(dirname(__FILE__) . '/../../resources/node_modules/' . $dep . '/package.json');
 		    if (!$depPackageJson) {
 		        return $return;
 		    }
@@ -570,6 +577,7 @@ class HomeWizard extends eqLogic {
 			$newCmd = new HomeWizardCmd();
 			$newCmd->setLogicalId($cmd['logicalId']);
 			$newCmd->setIsVisible($cmd['isVisible']);
+			if($cmd['type'] == 'info' && isset($cmd['isHistorized'])) $newCmd->setIsHistorized($cmd['isHistorized']);
 			$newCmd->setOrder($order);
 			
 			$origName=$cmd['name'];
@@ -585,7 +593,7 @@ class HomeWizard extends eqLogic {
 			log::add('HomeWizard','debug',__("Modification commande", __FILE__).' '.(($cmd['name'])?$cmd['name']:$cmd['logicalId']));
 		}
 		if(isset($cmd['unite'])) {
-			$newCmd->setUnite( $cmd['unite'] );
+			$newCmd->setUnite($cmd['unite']);
 		}
 		if(isset($cmd['type'])) {
 			$newCmd->setType($cmd['type']);
