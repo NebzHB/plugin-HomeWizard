@@ -98,9 +98,9 @@ class HomeWizard extends eqLogic {
 								$unite = $keyPart[count($keyPart)-1];
 								switch($unite) {
 									case 'timestamp':
-										$unite='';
-									break;
 									case 'factor':
+									case 'count':
+									case 'id':
 										$unite='';
 									break;
 									case 'kwh':
@@ -114,6 +114,9 @@ class HomeWizard extends eqLogic {
 									break;
 									case 'm3':
 										$unite="m³";
+									break;
+									case 'pct':
+										$unite="%";
 									break;
 									default:
 										$unite=strtoupper($unite);
@@ -137,6 +140,7 @@ class HomeWizard extends eqLogic {
 								]
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp') $cmd['subtype']='string';
+							if($key == 'wifi_strength') $cmd['unite']='%';
 							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
 							if($key == 'brightness') {
 								unset($cmd['template']);
@@ -149,6 +153,11 @@ class HomeWizard extends eqLogic {
 						} else {
 							switch($key) {
 								case 'montly_power_peak_timestamp':
+									if (preg_match('/^\d{12}$/', $value)) {
+										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/Y H:i:s');
+									}
+								break;
+								case 'gaz_timestamp':
 									if (preg_match('/^\d{12}$/', $value)) {
 										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/Y H:i:s');
 									}
