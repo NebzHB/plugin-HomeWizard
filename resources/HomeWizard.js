@@ -64,6 +64,7 @@ const discovery = new HW.HomeWizardEnergyDiscovery();
 
 /* Routing */
 const app = express();
+app.set("query parser", "extended");
 const myCommands = {};
 
 /** Stop the server **/
