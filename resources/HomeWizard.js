@@ -86,7 +86,7 @@ myCommands.stop = function(req, res) {
 myCommands.cmd = async function(req, res) {
 	res.type('json');
 
-	Logger.log("Reçu une commande..."+JSON.stringify(req.query),LogType.Debug); 
+	Logger.log("Reçu une commande..."+JSON.stringify(req.query),LogType.DEBUG); 
 	if ('id' in req.query === false) {
 		const error="Pour faire une commande, le démon a besoin de l'id";
 		Logger.log(error,LogType.ERROR); 
@@ -246,7 +246,7 @@ function discover() {
 	discovery.on('response', async (mdns) => {
 		const type=mdns.txt.product_type;
 		Logger.log("Découverte de : "+JSON.stringify(mdns, null, 4),LogType.DEBUG);
-		if(mdns.txt.api_enabled == 0) {console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);return;}
+		if(mdns.txt.api_enabled == 0) {console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...");return;}
 
 		const index=type+'_'+mdns.txt.serial;
 		
