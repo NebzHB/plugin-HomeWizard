@@ -143,8 +143,10 @@ myCommands.cmd = async function(req, res) {
 			res.json({'result':'ko','error':error});
 		}
 	} catch (e) {
-		Logger.log("Réponse de la commande KO : "+e.response,LogType.Info); 
-		res.json({'result':'ko','error':e});
+		const errorDetail = e.response || e.message || e;
+    	const logMsg = (typeof errorDetail === 'object') ? JSON.stringify(errorDetail) : errorDetail;
+		Logger.log("Réponse de la commande KO : "+logMsg,LogType.Info);
+		res.json({'result':'ko','error':logMsg});
 	}
 };
 
