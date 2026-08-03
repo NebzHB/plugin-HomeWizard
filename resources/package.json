@@ -23,7 +23,7 @@
   "dependencies": {
 	"homewizard-energy-api": ">=1.5.0",
 	"express": ">=5.2.1",
-	"axios": ">=1.16.1"
+	"axios": ">=1.19.0"
   },
   "devDependencies": {
 	"eslint": "*"
