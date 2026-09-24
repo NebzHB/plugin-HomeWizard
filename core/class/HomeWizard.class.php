@@ -402,7 +402,7 @@ class HomeWizard extends eqLogic {
 				sleep(1);
 			}
 			
-			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+			$pid = exec("pgrep -fo 'resources/HomeWizard.js'");
 			if($pid) {
 				system::kill($pid);
 				log::add('HomeWizard', 'info', __("Arrêt SIGTERM du démon", __FILE__).' '.'HomeWizard');
@@ -415,7 +415,7 @@ class HomeWizard extends eqLogic {
 				}
 			}
 			
-			$pid = exec("pgrep -f 'resources/HomeWizard.js'");
+			$pid = exec("pgrep -fo 'resources/HomeWizard.js'");
 			if($pid) {
 				system::kill($pid,true);
 				log::add('HomeWizard', 'info', __("Arrêt SIGKILL du démon", __FILE__).' '.'HomeWizard');
