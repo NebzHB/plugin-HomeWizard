@@ -20,6 +20,9 @@ require_once dirname(__FILE__) . '/../../../../core/php/core.inc.php';
 
 class HomeWizard extends eqLogic {
 	/***************************Attributs*******************************/	
+	public static function backupExclude() {
+		return ['resources/node_modules'];
+	}
 
 	public static function cron5() {
 		$deamon_info = self::deamon_info();
