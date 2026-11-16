@@ -182,6 +182,29 @@ myCommands.cmd = async function(req, res) {
 				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
 				res.json({'result':'ok'});
 			}
+		} else if(req.query.cmd == 'reboot') {
+			if(typeof conn[req.query.id].reboot != 'function') {
+				throw new Error("Cet équipement ne peut pas être redémarré par l'API");
+			}
+			await conn[req.query.id].reboot();
+			Logger.log("Redémarrage demandé : "+req.query.id,LogType.Info);
+			res.json({'result':'ok'});
+		} else if(req.query.cmd == 'cloud' || req.query.cmd == 'led') {
+			// réglages système : communication avec le cloud HomeWizard, luminosité de la led d'état (API v2)
+			if(typeof conn[req.query.id].updateSystem != 'function') {
+				throw new Error("Cet équipement n'a pas ce réglage");
+			}
+			let params;
+			if(req.query.cmd == 'cloud') {
+				params={cloud_enabled: (req.query.val == 1)};
+			} else {
+				if(!conn[req.query.id].isV2) {throw new Error("La luminosité de la led nécessite l'API v2");}
+				params={status_led_brightness_pct: Math.max(0, Math.min(100, parseInt(req.query.val) || 0))};
+			}
+			result=await conn[req.query.id].updateSystem(params);
+			Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info);
+			systemEvent(req.query.id, result);
+			res.json({'result':'ok'});
 		} else if(req.query.cmd == 'batteries_mode' || req.query.cmd == 'batteries_permission' || req.query.cmd == 'batteries_charge_to_full') {
 			// pilotage du groupe de Plug-In Batteries associé à ce compteur (API v2)
 			if(typeof conn[req.query.id].updateBatteries != 'function') {
@@ -540,18 +563,31 @@ function removeConnection(index) {
 	}
 }
 
-// API v2 : le wifi n'est plus dans les mesures mais dans /api/system
+// réglages système remontés à Jeedom (uniquement ceux que l'équipement donne)
+function systemEvent(index, system) {
+	if(!system || typeof system != 'object') {return;}
+	const ev = {};
+	if(typeof system.cloud_enabled == 'boolean') {ev.cloud_enabled = system.cloud_enabled?1:0;}
+	if(typeof system.status_led_brightness_pct == 'number') {ev.status_led_brightness_pct = system.status_led_brightness_pct;}
+	if(conn[index] && conn[index].isV2) {
+		// API v2 : le wifi n'est plus dans les mesures mais dans /api/system
+		const rssi = system.wifi_rssi_db;
+		if(system.wifi_ssid !== undefined) {ev.wifi_ssid = system.wifi_ssid;}
+		if(typeof rssi == 'number') {
+			ev.wifi_rssi_db = rssi;
+			// même calcul que le client officiel HomeWizard, garde la commande wifi_strength (%) de l'API v1 vivante
+			ev.wifi_strength = (rssi <= -100 || rssi == 0)?0:((rssi >= -50)?100:2 * (rssi + 100));
+		}
+	}
+	if(Object.keys(ev).length) {eventReceived(index,ev);}
+}
+
+// /api/system : wifi (API v2) et réglages système (cloud, led)
 function startSystemInterval(index) {
 	const getSystem = async () => {
+		if(!conn[index] || typeof conn[index].getSystem != 'function') {return;}
 		try {
-			const system = await conn[index].getSystem();
-			const rssi = system.wifi_rssi_db;
-			const ev = {wifi_ssid: system.wifi_ssid, wifi_rssi_db: rssi};
-			// même calcul que le client officiel HomeWizard, garde la commande wifi_strength (%) de l'API v1 vivante
-			if(typeof rssi == 'number') {
-				ev.wifi_strength = (rssi <= -100 || rssi == 0)?0:((rssi >= -50)?100:2 * (rssi + 100));
-			}
-			eventReceived(index,ev);
+			systemEvent(index, await conn[index].getSystem());
 		} catch(error) {
 			Logger.log(index+' (getSystem) : '+error,LogType.DEBUG);
 			// utilisateur supprimé pendant que le démon tourne
@@ -692,6 +728,8 @@ async function doConnect(index, type, mdns, quiet) {
 		// API v2 : l'équipement pousse ses mesures par WebSocket, plus besoin de l'interroger
 		startWebSocket(index);
 	} else {
+		// API v1 : /api/v1/system ne donne que le réglage du cloud
+		startSystemInterval(index);
 		startPolling(index);
 	}
 }

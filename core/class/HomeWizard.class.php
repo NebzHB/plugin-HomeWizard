@@ -159,7 +159,10 @@ class HomeWizard extends eqLogic {
 			case 'tokenInvalid':
 				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getConfiguration('tokenInvalid') != 1) {
-					log::add('HomeWizard', 'error', __("Le token de l'API v2 n'est plus valide, refaites l'autorisation (assistant Migration API v2) de l'équipement", __FILE__).' '.$eqp->getName());
+					// une seule alerte par équipement dans le centre de messages, retirée quand l'autorisation est refaite
+					$alert = __("Jeedom n'est plus autorisé sur l'équipement", __FILE__).' '.$eqp->getHumanName().' : '.__("il ne remonte plus de valeurs. Refaites l'autorisation dans l'assistant Migration API v2 du plugin (un appui sur le bouton de l'équipement).", __FILE__);
+					log::add('HomeWizard', 'warning', $alert);
+					message::add('HomeWizard', $alert, '', 'HomeWizard::tokenInvalid::'.$eqp->getId());
 					$eqp->setConfiguration('tokenInvalid', 1);
 					$eqp->save(true);
 				}
@@ -251,7 +254,14 @@ class HomeWizard extends eqLogic {
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id' || $key == 'batteries_mode') $cmd['subtype']='string';
 							if($key == 'wifi_strength') $cmd['unite']='%';
-							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full') $cmd['subtype']='binary';
+							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full' || $key == 'cloud_enabled') $cmd['subtype']='binary';
+							// réglages système : l'état se lit sur les commandes action liées
+							if($key == 'cloud_enabled' || $key == 'status_led_brightness_pct') {
+								$cmd['isVisible']=0;
+								unset($cmd['template']);
+							}
+							$generic=self::genericTypeFor($key);
+							if($generic != '') $cmd['display']['generic_type']=$generic;
 							if($key == 'brightness') {
 								unset($cmd['template']);
 							}
@@ -299,6 +309,10 @@ class HomeWizard extends eqLogic {
 					}
 					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
 					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
+					if(isset($val['cloud_enabled']) || isset($val['status_led_brightness_pct'])) {
+						$eqp->createSystemActions();
+						$eqp->applyGenericTypes();
+					}
 					if($hasNewCmd) $eqp->save();
 				} else {
 					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id", __FILE__).' '.$logical);
@@ -730,6 +744,62 @@ class HomeWizard extends eqLogic {
 	}
 
 	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
+	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales */
+	public static function genericTypeFor($_logicalId) {
+		$generic = [
+			'active_power_w'=>'POWER', 'power_w'=>'POWER',
+			'total_power_import_kwh'=>'CONSUMPTION', 'energy_import_kwh'=>'CONSUMPTION',
+		];
+		return $generic[$_logicalId] ?? '';
+	}
+
+	/* Une seule fois par équipement : types génériques des commandes créées avant qu'ils existent (sans toucher à ceux déjà choisis) */
+	public function applyGenericTypes() {
+		if ($this->getConfiguration('genericTypes') == 1) return;
+		foreach($this->getCmd('info') as $cmd) {
+			$generic = self::genericTypeFor($cmd->getLogicalId());
+			if ($generic != '' && $cmd->getGeneric_type() == '') {
+				$cmd->setGeneric_type($generic);
+				$cmd->save(true);
+			}
+		}
+		$this->setConfiguration('genericTypes', 1);
+		$this->save(true);
+	}
+
+	/* Identifier et redémarrer : selon le type et l'API de l'équipement */
+	public function canIdentify() {
+		if ($this->getConfiguration('apiVersion') == 'v2') return true;
+		return in_array($this->getConfiguration('type'), ['HWE-P1', 'HWE-SKT']);
+	}
+
+	public function canReboot() {
+		return ($this->getConfiguration('apiVersion') == 'v2' && in_array(self::v2Family($this->getConfiguration('type')), ['p1', 'kwh']));
+	}
+
+	/* Commandes action des réglages système (cloud, led d'état), d'identification et de redémarrage */
+	public function createSystemActions() {
+		$actions = [];
+		$writable = !in_array($this->getConfiguration('type'), self::v2OnlyTypes()); // cloud en lecture seule sur la Plug-In Battery
+		if (is_object($this->getCmd(null, 'cloud_enabled')) && $writable) {
+			$actions[] = ['action_cloud_on', __("Cloud activer", __FILE__), 'other', 'cloud_enabled', null, 1];
+			$actions[] = ['action_cloud_off', __("Cloud désactiver", __FILE__), 'other', 'cloud_enabled', ['actionConfirm'=>1], 1];
+		}
+		if (is_object($this->getCmd(null, 'status_led_brightness_pct'))) {
+			$actions[] = ['action_status_led_brightness', __("Luminosité led", __FILE__), 'slider', 'status_led_brightness_pct', ['minValue'=>0, 'maxValue'=>100], 1];
+		}
+		if ($this->canIdentify()) $actions[] = ['action_identify', __("Identifier", __FILE__), 'other', '', null, 1];
+		if ($this->canReboot()) $actions[] = ['action_reboot', __("Redémarrer", __FILE__), 'other', '', ['actionConfirm'=>1], 0];
+		foreach($actions as $action) {
+			if (is_object($this->getCmd(null, $action[0]))) continue;
+			$cmd = ['logicalId'=>$action[0], 'name'=>$action[1], 'type'=>'action', 'subtype'=>$action[2], 'isVisible'=>$action[5]];
+			if ($action[3] != '') $cmd['value'] = $action[3];
+			if ($action[4]) $cmd['configuration'] = $action[4];
+			if ($action[2] == 'slider') $cmd['unite'] = '%';
+			$this->createCmd($cmd);
+		}
+	}
+
 	public function createBatteriesActions() {
 		if (is_object($this->getCmd(null, 'action_batteries_charge_to_full_off'))) return;
 		$actions = [
@@ -915,6 +985,7 @@ class HomeWizard extends eqLogic {
 		$this->setConfiguration('token', $token);
 		$this->setConfiguration('v2UserName', $userName);
 		$this->setConfiguration('tokenInvalid', 0);
+		message::removeAll('HomeWizard', 'HomeWizard::tokenInvalid::'.$this->getId());
 		$this->setConfiguration('tokenShared', 0);
 		$this->save(true);
 		$renamed = $this->renameCmdsForApi(true);
@@ -935,6 +1006,7 @@ class HomeWizard extends eqLogic {
 		$this->setConfiguration('apiVersion', 'v1');
 		$this->setConfiguration('token', '');
 		$this->setConfiguration('tokenInvalid', 0);
+		message::removeAll('HomeWizard', 'HomeWizard::tokenInvalid::'.$this->getId());
 		$this->setConfiguration('tokenShared', 0);
 		$this->save(true);
 		$renamed = $this->renameCmdsForApi(false);
@@ -984,6 +1056,8 @@ class HomeWizard extends eqLogic {
 				foreach($eq['configuration'] as $c => $v) {
 					$eqp->setConfiguration($c, $v);
 				}
+				// nouveaux équipements : widget du plugin (les existants gardent leur affichage, case à cocher dans l'équipement)
+				$eqp->setConfiguration('pluginWidget', 1);
 				$eqp->setIsEnable($eq['enable']);
 				$eqp->setIsVisible($eq['visible']);
 				$eqp->save(true);
@@ -1080,6 +1154,104 @@ class HomeWizard extends eqLogic {
 		else return 'plugins/HomeWizard/plugin_info/HomeWizard_icon.png';
 	}
 	
+	/* Widget du plugin (case à cocher dans l'équipement) : la mesure principale, les totaux, les phases, l'état */
+	public function toHtml($_version = 'dashboard') {
+		if ($this->getConfiguration('pluginWidget', 0) != 1) return parent::toHtml($_version);
+		$replace = $this->preToHtml($_version);
+		if (!is_array($replace)) return $replace;
+		$version = jeedom::versionAlias($_version);
+		$cmds = [];
+		foreach($this->getCmd('info') as $cmd) $cmds[$cmd->getLogicalId()] = $cmd;
+		// première commande existante parmi les noms API v2 puis v1
+		$find = function($ids) use ($cmds) {
+			foreach((array)$ids as $id) {
+				if (isset($cmds[$id])) return $cmds[$id];
+			}
+			return null;
+		};
+		$span = function($cmd, $kind = 'number', $decimals = 0) {
+			$history = ($cmd->getIsHistorized() == 1)?' history cursor':'';
+			return '<span class="hw-value'.$history.'" data-cmd_id="'.$cmd->getId().'" data-hw_cmd="'.$cmd->getId().'" data-hw_kind="'.$kind.'" data-hw_dec="'.$decimals.'" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></span>';
+		};
+		$tile = function($label, $content) {
+			return '<div class="hw-tile"><div class="hw-tile-label">'.$label.'</div><div class="hw-tile-value">'.$content.'</div></div>';
+		};
+		$family = self::v2Family($this->getConfiguration('type'));
+
+		// mesure principale
+		$main = '';
+		$power = $find(['power_w', 'active_power_w']);
+		$water = $find('active_liter_lpm');
+		if (is_object($power)) {
+			$signed = in_array($family, ['p1', 'kwh']); // compteurs : négatif = injection
+			$main = '<div class="hw-main-value">'.$span($power, $signed?'power':'number').' <small>W</small></div>';
+			$main .= '<div class="hw-main-label">'.($signed?'<span class="hw-lbl-import">'.__("Soutirage", __FILE__).'</span><span class="hw-lbl-export">'.__("Injection", __FILE__).'</span>':__("Puissance", __FILE__)).'</div>';
+		} elseif (is_object($water)) {
+			$main = '<div class="hw-main-value">'.$span($water, 'number', 1).' <small>L/min</small></div><div class="hw-main-label">'.__("Débit", __FILE__).'</div>';
+		} else {
+			$main = '<div class="hw-main-label">'.__("En attente de valeurs", __FILE__).'</div>';
+		}
+
+		// prise : bouton marche/arrêt
+		$switch = '';
+		$state = $find('power_on');
+		$on = $this->getCmd('action', 'action_power_on');
+		$off = $this->getCmd('action', 'action_power_off');
+		if (is_object($state) && is_object($on) && is_object($off)) {
+			$switch = '<i class="fas fa-power-off hw-switch" data-hw_cmd="'.$state->getId().'" data-hw_kind="switch" data-hw_value="'.htmlspecialchars((string)$state->execCmd(), ENT_QUOTES, 'UTF-8').'" data-hw_on="'.$on->getId().'" data-hw_off="'.$off->getId().'" title="'.__("Allumer / Eteindre", __FILE__).'"></i>';
+		}
+
+		// tuiles
+		$tiles = '';
+		$cmd = $find('state_of_charge_pct');
+		if (is_object($cmd)) $tiles .= $tile(__("Charge", __FILE__), $span($cmd).' <small>%</small><div class="hw-bar"><div data-hw_cmd="'.$cmd->getId().'" data-hw_kind="bar" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></div></div>');
+		$cmd = $find('cycles');
+		if (is_object($cmd)) $tiles .= $tile(__("Cycles", __FILE__), $span($cmd));
+		$cmd = $find(['energy_import_kwh', 'total_power_import_kwh']);
+		if (is_object($cmd)) $tiles .= $tile(($family == 'bat')?__("Energie chargée", __FILE__):__("Import", __FILE__), $span($cmd, 'number', 1).' <small>kWh</small>');
+		$cmd = $find(['energy_export_kwh', 'total_power_export_kwh']);
+		if (is_object($cmd)) $tiles .= $tile(($family == 'bat')?__("Energie restituée", __FILE__):__("Export", __FILE__), $span($cmd, 'number', 1).' <small>kWh</small>');
+		$cmd = $find('total_gas_m3');
+		if (is_object($cmd)) $tiles .= $tile(__("Gaz", __FILE__), $span($cmd, 'number', 2).' <small>m³</small>');
+		$cmd = $find('total_liter_m3');
+		if (is_object($cmd)) $tiles .= $tile(__("Eau", __FILE__), $span($cmd, 'number', 3).' <small>m³</small>');
+		$cmd = $find(['tariff_txt', 'active_tariff_txt']);
+		if (is_object($cmd) && is_object($find(['tariff', 'active_tariff']))) $tiles .= $tile(__("Tarif", __FILE__), $span($cmd, 'text'));
+		$cmd = $find(['batteries_mode']);
+		if (is_object($cmd)) $tiles .= $tile(__("Batteries", __FILE__), $span($cmd, 'text'));
+		if ($tiles != '') $tiles = '<div class="hw-tiles">'.$tiles.'</div>';
+
+		// phases (seulement s'il y en a plusieurs)
+		$phases = '';
+		if (is_object($find(['power_l2_w', 'active_power_l2_w']))) {
+			foreach([1, 2, 3] as $phase) {
+				$row = '';
+				foreach([[['voltage_l'.$phase.'_v', 'active_voltage_l'.$phase.'_v'], 'V', 0], [['current_l'.$phase.'_a', 'active_current_l'.$phase.'_a'], 'A', 1], [['power_l'.$phase.'_w', 'active_power_l'.$phase.'_w'], 'W', 0]] as $col) {
+					$cmd = $find($col[0]);
+					$row .= '<td>'.(is_object($cmd)?$span($cmd, 'number', $col[2]).' '.$col[1]:'').'</td>';
+				}
+				$phases .= '<tr><td>L'.$phase.'</td>'.$row.'</tr>';
+			}
+			$phases = '<table class="hw-phases">'.$phases.'</table>';
+		}
+
+		// pied : en ligne, wifi, API
+		$foot = '';
+		$cmd = $find('online');
+		if (is_object($cmd)) $foot .= '<span><span class="hw-dot" data-hw_cmd="'.$cmd->getId().'" data-hw_kind="online" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></span> <span class="hw-lbl-online">'.__("En ligne", __FILE__).'</span><span class="hw-lbl-offline">'.__("Hors ligne", __FILE__).'</span></span>';
+		$cmd = $find('wifi_strength');
+		if (is_object($cmd)) $foot .= '<span><i class="fas fa-wifi"></i> '.$span($cmd).' %</span>';
+		$foot .= '<span class="hw-grow"></span><span>API '.(($this->getConfiguration('apiVersion') == 'v2')?'v2':'v1').'</span>';
+
+		$replace['#hw_image#'] = $this->getImage();
+		$replace['#hw_main#'] = $main;
+		$replace['#hw_switch#'] = $switch;
+		$replace['#hw_tiles#'] = $tiles;
+		$replace['#hw_phases#'] = $phases;
+		$replace['#hw_foot#'] = $foot;
+		return $this->postToHtml($_version, template_replace($replace, getTemplate('core', $version, 'eqLogic', 'HomeWizard')));
+	}
+
 	public function createCmd($cmd) {
 		$changed=false;
 		$order=intval($this->getConfiguration('orderCmd',1));
@@ -1127,6 +1299,10 @@ class HomeWizard extends eqLogic {
 		} 
 		if(isset($cmd['display'])) {
 			foreach($cmd['display'] as $display_type=>$display_value) {
+				if($display_type == 'generic_type' && method_exists($newCmd, 'setGeneric_type')) {
+					$newCmd->setGeneric_type($display_value);
+					continue;
+				}
 				$newCmd->setDisplay($display_type, $display_value);
 			}
 		}
@@ -1295,6 +1471,24 @@ class HomeWizardCmd extends cmd {
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
 				if($result['result']==='ko') {
 					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_reboot':
+			case 'action_cloud_on':
+			case 'action_cloud_off':
+			case 'action_status_led_brightness':
+				// réglages système de l'équipement
+				if ($logical == 'action_reboot') {
+					$request = ['cmd'=>'reboot', 'id'=>$eqLogical];
+				} elseif ($logical == 'action_status_led_brightness') {
+					$request = ['cmd'=>'led', 'id'=>$eqLogical, 'val'=>intval($_options['slider'] ?? 0)];
+				} else {
+					$request = ['cmd'=>'cloud', 'id'=>$eqLogical, 'val'=>($logical == 'action_cloud_on')?1:0];
+				}
+				$result = HomeWizard::hwExecute('cmd',$request);
+				if(!is_array($result) || $result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result) && isset($result['error']))?json_encode($result['error']):''));
 					return false;
 				}
 			break;

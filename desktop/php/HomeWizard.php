@@ -163,6 +163,14 @@ $eqLogics = eqLogic::byType('HomeWizard');
 									</div>
 								</div>
 								<div class="form-group">
+									<label class="col-sm-3 control-label">{{Widget du plugin}}
+										<sup><i class="fas fa-question-circle tooltips" title="{{Affiche l'équipement avec le widget du plugin (mesure principale, totaux, phases, état) à la place de la liste des commandes}}"></i></sup>
+									</label>
+									<div class="col-sm-9">
+										<input type="checkbox" class="eqLogicAttr" data-l1key="configuration" data-l2key="pluginWidget"/>
+									</div>
+								</div>
+								<div class="form-group">
 									<label class="col-sm-3 control-label">{{Numéro de série}}</label>
 									<div class="col-sm-3">
 										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="serial"></span>
