@@ -158,7 +158,7 @@ $eqLogics = eqLogic::byType('HomeWizard');
 									<label class="col-sm-3 control-label">{{API utilisée}}</label>
 									<div class="col-sm-9">
 										<span class="label label-default" id="span_apiVersion"></span>
-										<a class="btn btn-success btn-xs" id="bt_migrateEqLogic" style="display:none;margin-left:10px;"><i class="fas fa-exchange-alt"></i> {{Migrer vers l'API v2}}</a>
+										<a class="btn btn-success btn-xs" id="bt_migrateEqLogic" style="display:none;margin-left:10px;"><i class="fas fa-exchange-alt"></i> <span class="txt">{{Migrer vers l'API v2}}</span></a>
 										<span id="span_apiInfo" style="margin-left:10px;"></span>
 									</div>
 								</div>

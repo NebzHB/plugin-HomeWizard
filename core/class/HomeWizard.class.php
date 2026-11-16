@@ -112,17 +112,21 @@ class HomeWizard extends eqLogic {
 				}
 				if ($data['result'] == 'ok' && !empty($data['token'])) {
 					$renamed = $eqp->migrateToV2($data['token'], $data['userName'] ?? '');
-					log::add('HomeWizard', 'info', __("Migration vers l'API v2 réussie pour", __FILE__).' '.$eqp->getName().' ('.$renamed.' '.__("commandes renommées", __FILE__).')');
+					if (in_array($eqp->getConfiguration('type'), self::v2OnlyTypes())) {
+						log::add('HomeWizard', 'info', __("Jeedom est autorisé sur", __FILE__).' '.$eqp->getName());
+					} else {
+						log::add('HomeWizard', 'info', __("Migration vers l'API v2 réussie pour", __FILE__).' '.$eqp->getName().' ('.$renamed.' '.__("commandes renommées", __FILE__).')');
+					}
 					event::add('HomeWizard::pairResult', ['id'=>$eqp->getId(), 'result'=>'ok', 'renamed'=>$renamed]);
 				} else {
-					log::add('HomeWizard', 'info', __("Migration vers l'API v2 non aboutie pour", __FILE__).' '.$eqp->getName().' : '.($data['reason'] ?? '').' '.($data['error'] ?? ''));
+					log::add('HomeWizard', 'info', __("Appui sur le bouton non abouti pour", __FILE__).' '.$eqp->getName().' : '.($data['reason'] ?? '').' '.($data['error'] ?? ''));
 					event::add('HomeWizard::pairResult', ['id'=>$eqp->getId(), 'result'=>'ko', 'reason'=>$data['reason'] ?? 'error', 'error'=>$data['error'] ?? '']);
 				}
 			break;
 			case 'tokenInvalid':
 				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getConfiguration('tokenInvalid') != 1) {
-					log::add('HomeWizard', 'error', __("Le token de l'API v2 n'est plus valide, refaites la migration de l'équipement", __FILE__).' '.$eqp->getName());
+					log::add('HomeWizard', 'error', __("Le token de l'API v2 n'est plus valide, refaites l'autorisation (assistant Migration API v2) de l'équipement", __FILE__).' '.$eqp->getName());
 					$eqp->setConfiguration('tokenInvalid', 1);
 					$eqp->save(true);
 				}
@@ -637,9 +641,10 @@ class HomeWizard extends eqLogic {
 				'family'=>self::v2Family($type),
 				'state'=>$eqp->getMigrationState(),
 				'canRevert'=>($eqp->getConfiguration('apiVersion') == 'v2' && !in_array($type, self::v2OnlyTypes())),
-				'apiVersion'=>$eqp->getConfiguration('apiVersion', 'v1'),
+				'apiVersion'=>(in_array($type, self::v2OnlyTypes()))?'v2':$eqp->getConfiguration('apiVersion', 'v1'),
 				'v2ApiVersion'=>$eqp->getConfiguration('v2ApiVersion'),
-				'staleCmds'=>$eqp->v2StaleCmds()
+				'staleCmds'=>$eqp->v2StaleCmds(),
+				'v2Only'=>in_array($type, self::v2OnlyTypes())
 			];
 		}
 		return $return;
@@ -647,6 +652,7 @@ class HomeWizard extends eqLogic {
 
 	/*
 	 * v2 : déjà migré, invalid : migré mais le token n'est plus accepté, ready : migration possible,
+	 * pair : équipement qui n'existe qu'en API v2 (pas de migration), il attend seulement l'autorisation par son bouton,
 	 * firmware : type supporté mais l'équipement n'annonce pas (encore) l'API v2, unsupported : pas d'API v2 pour ce type
 	 */
 	public function getMigrationState() {
@@ -654,6 +660,7 @@ class HomeWizard extends eqLogic {
 		if ($this->getConfiguration('apiVersion') == 'v2') {
 			return ($this->getConfiguration('tokenInvalid') == 1)?'invalid':'v2';
 		}
+		if (in_array($type, self::v2OnlyTypes())) return 'pair';
 		if (!in_array($type, self::v2SupportedTypes())) return 'unsupported';
 		if ($this->getConfiguration('v2Available') != 1) return 'firmware';
 		return 'ready';
@@ -662,8 +669,8 @@ class HomeWizard extends eqLogic {
 	/* Demande au démon d'attendre l'appui sur le bouton de l'équipement */
 	public function startPairing() {
 		$state = $this->getMigrationState();
-		if ($state != 'ready' && $state != 'invalid') {
-			throw new Exception(__("La migration vers l'API v2 n'est pas possible pour cet équipement", __FILE__).' ('.$state.')');
+		if (!in_array($state, ['ready', 'pair', 'invalid'])) {
+			throw new Exception(__("L'API v2 n'est pas disponible pour cet équipement", __FILE__).' ('.$state.')');
 		}
 		$result = self::hwExecute('pair', ['id'=>$this->getLogicalId(), 'timeout'=>self::V2_PAIR_TIMEOUT]);
 		if (!is_array($result) || !isset($result['result'])) {

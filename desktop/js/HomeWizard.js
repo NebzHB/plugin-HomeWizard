@@ -44,17 +44,21 @@ function printEqLogic(_eqLogic) {
     var isV2 = (conf.apiVersion == 'v2');
     var v2Types = ['HWE-P1', 'SDM230-wifi', 'HWE-KWH1', 'SDM630-wifi', 'HWE-KWH3', 'HWE-BAT'];
     var supported = (v2Types.indexOf(conf.type) >= 0);
+    var v2Only = (conf.type == 'HWE-BAT'); // n'existe qu'en API v2 : pas de migration, seulement une autorisation par le bouton
     var info = '';
-    $('#span_apiVersion').text((isV2) ? 'v2' : 'v1').toggleClass('label-success', isV2).toggleClass('label-default', !isV2);
+    $('#span_apiVersion').text((isV2 || v2Only) ? 'v2' : 'v1').toggleClass('label-success', isV2).toggleClass('label-default', !isV2);
+    $('#bt_migrateEqLogic .txt').text((v2Only) ? "{{Autoriser Jeedom (appui sur le bouton)}}" : "{{Migrer vers l'API v2}}");
     if (isV2 && conf.tokenInvalid == 1) {
-        info = "{{Token refusé par l'équipement, migration à refaire}}";
+        info = (v2Only) ? "{{Token refusé par l'équipement, autorisation à refaire}}" : "{{Token refusé par l'équipement, migration à refaire}}";
+    } else if (!isV2 && v2Only) {
+        info = "{{Les valeurs arriveront une fois Jeedom autorisé}}";
     } else if (!isV2 && !supported) {
         info = "{{HomeWizard ne propose pas encore l'API v2 pour ce type}}";
     } else if (!isV2 && conf.v2Available != 1) {
         info = "{{L'équipement n'annonce pas l'API v2 : mettez son firmware à jour}}";
     }
     $('#span_apiInfo').text(info);
-    $('#bt_migrateEqLogic').toggle(supported && conf.v2Available == 1 && (!isV2 || conf.tokenInvalid == 1));
+    $('#bt_migrateEqLogic').toggle(supported && (conf.v2Available == 1 || v2Only) && (!isV2 || conf.tokenInvalid == 1));
 }
 
 $('#bt_resetEqlogicSearch').on('click', function() {
