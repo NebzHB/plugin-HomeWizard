@@ -27,6 +27,8 @@ const v2Only=["HWE-BAT"];
 const systemPollingInterval=60000;
 const webSocketFallbackDelay=15000; // sans mesure reçue par WebSocket après ce délai, on repasse en polling
 const webSocketLostDelay=30000; // une coupure du WebSocket plus courte est silencieuse (la librairie se reconnecte seule)
+const onlineCycles=3; // un équipement est en ligne s'il a envoyé un message pendant les 3 derniers cycles (période configurée)
+const onlineMinDelay=10000; // jamais moins de 10s : une reconnexion du WebSocket prend déjà 5s
 const v1FallbackDelay=10000; // équipement annoncé seulement en API v2 et pas autorisé : on tente quand même l'API v1
 const pairDefaultTimeout=120; // secondes
 const pairInterval=2000;
@@ -73,6 +75,8 @@ const systemIntervals = {};
 const wsTimers = {}; // API v2 : timers du WebSocket par équipement {fallback, throttle}
 const known = {}; // derniers mdns reçus par équipement : {v1: mdns, v2: mdns}
 const pairings = {}; // appairages (migration API v2) en cours
+const lastSeen = {}; // dernier message reçu par équipement
+const onlineState = {}; // dernier état en ligne envoyé à Jeedom par équipement
 conf.devices = {}; // {id: {apiVersion: 'v2', token: 'xxx'}} reçu de Jeedom
 // La librairie doit supporter l'API v2 (>= 1.6.0)
 const libHasV2 = (typeof HW.P1MeterApiV2 == 'function');
@@ -303,22 +307,34 @@ myCommands.pairCancel = function(req, res) {
 myCommands.unpair = async function(req, res) {
 	res.type('json');
 	const id = req.query.id;
-	Logger.log("Reçu une demande de retour à l'API v1 pour "+id,LogType.INFO);
+	Logger.log("Reçu une demande de "+((req.query.forget == 1)?"retrait de l'autorisation API v2 (équipement supprimé)":"retour à l'API v1")+" pour "+id,LogType.INFO);
+	const type = id.split('_')[0];
 	let deleted = false;
-	try {
-		// keepUser : le token est partagé avec un autre Jeedom (copie), on ne le supprime pas de l'équipement
-		if (conn[id] && conn[id].isV2 && req.query.keepUser != 1) {
-			await conn[id].deleteUser();
-			deleted = true;
+	// keepUser : le token est partagé avec un autre Jeedom (copie), on ne le supprime pas de l'équipement
+	if (req.query.keepUser != 1) {
+		// équipement plus connecté (hors ligne au démarrage...) : connexion temporaire avec son token pour le supprimer
+		const temporary = !(conn[id] && conn[id].isV2);
+		const api = (!temporary)?conn[id]:((useV2(id) && known[id])?newConnection(type, known[id].v2 || known[id].v1, 2, conf.devices[id].token):null);
+		try {
+			if (api) {
+				await api.deleteUser();
+				deleted = true;
+			}
+		} catch (e) {
+			Logger.log(id+" : Impossible de supprimer l'utilisateur sur l'équipement : "+(e.errorCode || e.message || e),LogType.WARNING);
 		}
-	} catch (e) {
-		Logger.log(id+" : Impossible de supprimer l'utilisateur sur l'équipement : "+(e.errorCode || e.message || e),LogType.WARNING);
+		if (api && temporary) {api.close().catch(() => {});}
 	}
 	delete conf.devices[id];
-	const type = id.split('_')[0];
-	const mdns = (known[id])?known[id].v1:null;
 	removeConnection(id);
-	if (mdns) {connect(id, type, mdns);}
+	if (req.query.forget == 1) {
+		// équipement supprimé de Jeedom : on ne le reconnecte pas en API v1
+		delete lastSeen[id];
+		delete onlineState[id];
+	} else {
+		const mdns = (known[id])?known[id].v1:null;
+		if (mdns) {connect(id, type, mdns);}
+	}
 	res.json({'result':'ok','userDeleted':deleted});
 };
 
@@ -626,7 +642,6 @@ function startWebSocket(index) {
 		if(lost) {
 			lost = false;
 			Logger.log(index+' (WebSocket) : Reconnecté',LogType.INFO);
-			jsend({eventType: 'doPing', id: index}); // remet la commande Online à jour
 		}
 		pending = measurement;
 		if(timers.throttle) {return;}
@@ -651,8 +666,8 @@ function startWebSocket(index) {
 			timers.lost = null;
 			if(conn[index] !== api) {return;}
 			lost = true;
-			Logger.log(index+' (WebSocket) : Ne réponds plus sur le réseau, nouvelles tentatives en continu...',LogType.WARNING);
-			jsend({eventType: 'doPing', id: index});
+			// l'avertissement utilisateur est celui du passage hors ligne (setOnline)
+			Logger.log(index+' (WebSocket) : Toujours pas de connexion, nouvelles tentatives en continu...',LogType.DEBUG);
 			// si l'équipement a changé d'IP, sa prochaine annonce mDNS doit être prise en compte
 			if(api.mdns) {discovery.removeCachedResponseByFqdn(api.mdns.fqdn);}
 		}, webSocketLostDelay);
@@ -753,9 +768,31 @@ function discover() {
 }
 
 
+// Commande Online : l'équipement est en ligne tant qu'il a envoyé un message pendant les 3 derniers cycles
+function setOnline(index, online) {
+	if(onlineState[index] === online) {return;}
+	onlineState[index] = online;
+	Logger.log(index+' : '+((online)?'En ligne':'Hors ligne, aucun message depuis '+onlineCycles+' cycles'),(online)?LogType.INFO:LogType.WARNING);
+	jsend({eventType: 'online', id: index, value: (online)?1:0});
+}
+
+setInterval(() => {
+	for(const index in onlineState) {
+		if (!hasOwnProperty.call(onlineState,index) || !onlineState[index]) {continue;}
+		const limit = Math.max(onlineCycles * (conf.pollingIntervals[index.split('_')[0]] || 5000), onlineMinDelay);
+		if(Date.now() - lastSeen[index] <= limit) {continue;}
+		// En WebSocket l'équipement n'envoie que ce qui change : une connexion ouverte et autorisée (vérifiée par un ping
+		// toutes les 30s) compte comme un signe de vie, sinon un équipement dont les valeurs ne bougent pas passerait hors ligne
+		if(conn[index] && conn[index].isV2 && wsTimers[index] && conn[index].websocket.isAuthorized) {continue;}
+		setOnline(index, false);
+	}
+}, 1000);
+
 function eventReceived(who,ev) {
 	const w=who.split('_');
 	if(!conn[who] || !conn[who].mdns) {return;}
+	lastSeen[who] = Date.now();
+	setOnline(who, true);
 	if(conf.logLevel=='debug') {
 		Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.DEBUG);
 	} else if(conf.logLevel=='info') {

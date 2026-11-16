@@ -31,14 +31,26 @@ class HomeWizard extends eqLogic {
 		return ['resources/node_modules'];
 	}
 
+	/*
+	 * La commande Online suit les messages reçus de l'équipement : le démon la passe à 0 après 3 cycles sans message et à 1
+	 * au message suivant. Ici, simple filet de sécurité pour ce que le démon ne voit pas : un équipement qu'il n'a jamais
+	 * revu depuis son démarrage, ou un démon arrêté.
+	 */
 	public static function cron5() {
 		$deamon_info = self::deamon_info();
-		if ($deamon_info['state'] != 'ok') return;
-		$eqLogics = eqLogic::byType('HomeWizard', true);
-		foreach($eqLogics as $HomeWizard) {
-			if ($HomeWizard->getIsEnable() == 0) continue;
-			if ($HomeWizard->pingHost($HomeWizard->getConfiguration('address')) == true) continue;
-			log::add('HomeWizard', 'debug', __("Offline Réseau", __FILE__) .': '. $HomeWizard->getName());
+		$daemonStart = cache::byKey('HomeWizard::daemonStart')->getValue(0);
+		// on laisse au démon le temps de retrouver les équipements après son démarrage
+		if ($deamon_info['state'] == 'ok' && (time() - $daemonStart) < 300) return;
+		$pollPeriods = config::byKey('pollPeriods', 'HomeWizard', [], true);
+		foreach(eqLogic::byType('HomeWizard', true) as $HomeWizard) {
+			$onlineCmd = $HomeWizard->getCmd(null, 'online');
+			if (!is_object($onlineCmd) || $onlineCmd->execCmd() != 1) continue;
+			$period = intval($pollPeriods[$HomeWizard->getConfiguration('type')] ?? 0);
+			$limit = max(300, 3 * (($period >= 100) ? $period : 5000) / 1000);
+			$lastSeen = cache::byKey('HomeWizard::lastSeen::'.$HomeWizard->getId())->getValue(0);
+			if ($deamon_info['state'] == 'ok' && (time() - $lastSeen) <= $limit) continue;
+			log::add('HomeWizard', 'debug', __("Hors ligne, aucun message reçu", __FILE__) .': '. $HomeWizard->getName());
+			$HomeWizard->checkAndUpdateCmd('online', 0);
 		}
 	}
 	public static function getConfigForCommunity()
@@ -134,10 +146,20 @@ class HomeWizard extends eqLogic {
 					$eqp->save(true);
 				}
 			break;
+			case 'online':
+				// en ligne = un message reçu pendant les 3 derniers cycles (calculé par le démon)
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
+				if (is_object($eqp)) {
+					log::add('HomeWizard', 'debug', (($data['value'] == 1)?__("En ligne", __FILE__):__("Hors ligne", __FILE__)).' : '.$eqp->getName());
+					if ($data['value'] == 1) cache::set('HomeWizard::lastSeen::'.$eqp->getId(), time());
+					$eqp->checkAndUpdateCmd('online', ($data['value'] == 1)?1:0);
+				}
+			break;
 			case 'updateValue':
 				$logical=$data['id'];
 				$eqp = eqlogic::byLogicalId($logical,'HomeWizard');
 				if (is_object($eqp)){
+					cache::set('HomeWizard::lastSeen::'.$eqp->getId(), time());
 					$val=$data['value'];
 					log::add('HomeWizard','debug',json_encode($val));
 					$hasNewCmd=false;
@@ -428,6 +450,7 @@ class HomeWizard extends eqLogic {
 			throw new Exception(__("Veuillez vérifier la configuration", __FILE__));
 		}
 		log::add('HomeWizard', 'info', __("Lancement du démon", __FILE__).' '.'HomeWizard');
+		cache::set('HomeWizard::daemonStart', time());
 		$socketport = self::getFreePort();
 		$url  = network::getNetworkAccess('internal').'/core/api/jeeApi.php' ;
 
@@ -936,25 +959,14 @@ class HomeWizard extends eqLogic {
 		}
 	}
 	
+	/* Simple test réseau pour les logs : la commande Online ne dépend plus du ping mais des messages reçus (voir cron5) */
 	public function pingHost($host, $timeout = null) {
 		$timeoutValue="";
 		if($timeout) {
 			$timeoutValue=" timeout -s 9 --preserve-status --foreground ".$timeout."s ";
 		}
 		exec(system::getCmdSudo(). $timeoutValue . "ping -c1 " . $host, $output, $return_var);
-		$onlineCmd = $this->getCmd(null, 'online');
-		if ($return_var == 0) {
-			$result = true;
-			if (is_object($onlineCmd)) {
-				$this->checkAndUpdateCmd('online', 1);
-			}
-		} else {
-			$result = false;
-			if (is_object($onlineCmd)) {
-				$this->checkAndUpdateCmd('online', 0);
-			}
-		}
-		return $result;
+		return ($return_var == 0);
 	}	
 	
 	public function getImage(){
@@ -1041,6 +1053,29 @@ class HomeWizard extends eqLogic {
 		return false;
 	}	
 
+	/* Suppression de l'équipement : on retire aussi l'autorisation de Jeedom sur l'équipement HomeWizard */
+	public function preRemove() {
+		if ($this->getConfiguration('apiVersion') != 'v2' || $this->getConfiguration('token') == '') return;
+		try {
+			if (self::deamon_info()['state'] != 'ok') {
+				log::add('HomeWizard', 'warning', __("Démon arrêté : l'autorisation API v2 n'a pas pu être retirée de l'équipement", __FILE__).' '.$this->getName());
+				return;
+			}
+			// token copié d'un autre Jeedom : l'autre s'en sert encore, on le laisse sur l'équipement
+			$keepUser = ($this->getConfiguration('tokenShared') == 1)?1:0;
+			$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId(), 'keepUser'=>$keepUser, 'forget'=>1]);
+			if ($keepUser) {
+				log::add('HomeWizard', 'info', __("Autorisation API v2 partagée avec un autre Jeedom, laissée sur l'équipement", __FILE__).' '.$this->getName());
+			} elseif (is_array($result) && !empty($result['userDeleted'])) {
+				log::add('HomeWizard', 'info', __("Autorisation API v2 retirée de l'équipement", __FILE__).' '.$this->getName());
+			} else {
+				log::add('HomeWizard', 'warning', __("L'autorisation API v2 n'a pas pu être retirée de l'équipement (injoignable ?)", __FILE__).' '.$this->getName());
+			}
+		} catch (Throwable $e) {
+			log::add('HomeWizard', 'warning', __("L'autorisation API v2 n'a pas pu être retirée de l'équipement", __FILE__).' '.$this->getName().' : '.$e->getMessage());
+		}
+	}
+
 	public function postSave() {
 		$online=$this->getCmd(null, 'online');
 		if(!is_object($online)) {
@@ -1058,8 +1093,6 @@ class HomeWizard extends eqLogic {
 			];
 			$this->createCmd($cmd);	
 		}
-		$this->pingHost($this->getConfiguration('address'));
-
 		$type = $this->getConfiguration('type');
 		$eqConfig = 'plugins/HomeWizard/core/config/'.$type.'.json';
 		$base = dirname(__FILE__) . '/../../../../';
