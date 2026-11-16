@@ -93,6 +93,8 @@
         "Valeur": "Value"
     },
     "plugins\/HomeWizard\/desktop\/modal\/health.php": {
+        "API": "APIs",
+        "API v2 annoncée par l\\'équipement": "API v2 announced by the manufacturer",
         "Adresse": "Address",
         "Date création": "Creation Date",
         "En Ligne": "On Line",
@@ -100,10 +102,13 @@
         "ID Logique": "Logical ID",
         "Inconnu": "Unknown",
         "KO": "KO",
+        "Migration vers l\\'API v2 possible": "Migration to API v2 is possible",
         "Module": "Module",
         "OK": "Ok",
         "Serial": "Serial",
-        "Type": "Type"
+        "Type": "Type",
+        "token refusé": "Token rejected",
+        "à autoriser": "to be authorized"
     },
     "plugins\/HomeWizard\/desktop\/modal\/migration.php": {
         "API utilisée": "API used",
