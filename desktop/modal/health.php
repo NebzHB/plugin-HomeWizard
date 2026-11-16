@@ -27,6 +27,7 @@ $eqLogics = eqLogic::byType('HomeWizard');
 			<th>{{Module}}</th>
 			<th>{{ID}}</th>
 			<th>{{Type}}</th>
+			<th>{{API}}</th>
 			<th>{{ID Logique}}</th>
 			<th>{{Adresse}}</th>
 			<th>{{Serial}}</th>
@@ -59,6 +60,25 @@ function displayHealthLine($eqLogic,$tab='') {
 	echo '<td>'.$tab.'<a href="' . $eqLogic->getLinkToConfiguration() . '" style="text-decoration: none;">' . $eqLogic->getHumanName(true) . ((!$eqLogic->getIsvisible())?'&nbsp;<i class="fas fa-eye-slash"></i>':''). '</a></td>';
 	echo '<td><span class="label label-info" style="font-size : 1em;width:100%">' . $eqLogic->getId() . '</span></td>';
 	echo '<td><span class="label label-info" style="font-size : 1em;width:100%">' . $type . '</span></td>';
+	// version de l'API locale utilisée pour cet équipement
+	switch($eqLogic->getMigrationState()) {
+		case 'v2':
+			$api='<span class="label label-success" style="font-size : 1em; cursor : default;width:100%" title="{{API v2 annoncée par l\'équipement}} : '.$eqLogic->getConfiguration('v2ApiVersion').'">v2</span>';
+		break;
+		case 'invalid':
+			$api='<span class="label label-danger" style="font-size : 1em; cursor : default;width:100%">v2 ({{token refusé}})</span>';
+		break;
+		case 'pair':
+			$api='<span class="label label-warning" style="font-size : 1em; cursor : default;width:100%">v2 ({{à autoriser}})</span>';
+		break;
+		case 'ready':
+			$api='<span class="label label-info" style="font-size : 1em; cursor : default;width:100%" title="{{Migration vers l\'API v2 possible}}">v1</span>';
+		break;
+		default:
+			$api='<span class="label label-info" style="font-size : 1em; cursor : default;width:100%">v1</span>';
+		break;
+	}
+	echo '<td>' . $api . '</td>';
 	echo '<td><span class="label label-info" style="font-size : 1em;width:100%">' . $eqLogic->getLogicalId() . '</span></td>';
 	echo '<td><span class="label label-info" style="font-size : 1em;width:100%">' . $eqLogic->getConfiguration('address') . '</span></td>';
 	echo '<td><span class="label label-info" style="font-size : 1em;width:100%">' . $eqLogic->getConfiguration('serial') . '</span></td>';
