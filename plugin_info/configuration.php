@@ -53,7 +53,7 @@ pre#pre_eventlog {
 			foreach ($types as $type) :
 		?>
 		<div class="form-group">
-			<label class="col-lg-6 control-label help" data-help="{{Période en miliseconde pour interroger l'équipement, il est déconseillé par le constructeur de descendre sous 1 seconde}}">{{Périodicité d'interrogation des}} <?php echo $type; ?></label>
+			<label class="col-lg-6 control-label help" data-help="{{Période en miliseconde pour interroger l'équipement, il est déconseillé par le constructeur de descendre sous 1 seconde. En API v2 l'équipement envoie lui-même ses mesures (chaque seconde pour un P1) : cette période est alors le rythme maximum de mise à jour des commandes dans Jeedom, mettez 1000 pour tout recevoir.}}">{{Périodicité d'interrogation des}} <?php echo $type; ?></label>
 			<div class="col-lg-2">
 				<div class="input-group">
 					<input class="configKey form-control roundedLeft" data-l1key="pollPeriods" data-l2key="<?php echo $type; ?>" placeholder="5000" /><span class="input-group-addon roundedRight">ms</span>
