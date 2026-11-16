@@ -644,7 +644,8 @@ class HomeWizard extends eqLogic {
 				'apiVersion'=>(in_array($type, self::v2OnlyTypes()))?'v2':$eqp->getConfiguration('apiVersion', 'v1'),
 				'v2ApiVersion'=>$eqp->getConfiguration('v2ApiVersion'),
 				'staleCmds'=>$eqp->v2StaleCmds(),
-				'v2Only'=>in_array($type, self::v2OnlyTypes())
+				'v2Only'=>in_array($type, self::v2OnlyTypes()),
+				'authOnly'=>($eqp->getMigrationState() == 'pair')
 			];
 		}
 		return $return;
@@ -652,7 +653,8 @@ class HomeWizard extends eqLogic {
 
 	/*
 	 * v2 : déjà migré, invalid : migré mais le token n'est plus accepté, ready : migration possible,
-	 * pair : équipement qui n'existe qu'en API v2 (pas de migration), il attend seulement l'autorisation par son bouton,
+	 * pair : rien à migrer (équipement uniquement API v2, ou nouvel équipement sans commande API v1), il attend seulement
+	 *        l'autorisation par son bouton,
 	 * firmware : type supporté mais l'équipement n'annonce pas (encore) l'API v2, unsupported : pas d'API v2 pour ce type
 	 */
 	public function getMigrationState() {
@@ -663,7 +665,17 @@ class HomeWizard extends eqLogic {
 		if (in_array($type, self::v2OnlyTypes())) return 'pair';
 		if (!in_array($type, self::v2SupportedTypes())) return 'unsupported';
 		if ($this->getConfiguration('v2Available') != 1) return 'firmware';
+		// nouvel équipement jamais utilisé en API v1 (API locale non activée) : rien à migrer, on l'autorise directement en v2
+		if (!$this->hasV1Cmds()) return 'pair';
 		return 'ready';
+	}
+
+	/* L'équipement a des commandes de l'API v1, donc quelque chose à migrer */
+	public function hasV1Cmds() {
+		foreach($this->getCmd() as $cmd) {
+			if (self::v2LogicalId($cmd->getLogicalId()) != $cmd->getLogicalId()) return true;
+		}
+		return false;
 	}
 
 	/* Demande au démon d'attendre l'appui sur le bouton de l'équipement */

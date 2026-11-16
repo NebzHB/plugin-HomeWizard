@@ -636,17 +636,26 @@ function discover() {
 		known[index][(isV2)?'v2':'v1']=mdns;
 		
 		if(isV2) {
-			// l'équipement annonce l'API v2 (_homewizard._tcp) : Jeedom peut proposer la migration
-			jsend({eventType: 'v2Available', id: index, mdns: mdns, supported: v2Supported.includes(type)});
-			if(v2Only.includes(type) && !useV2(index)) {
-				// pas d'API v1 : on crée l'équipement, les valeurs arriveront après l'appui sur le bouton (migration)
-				jsend({eventType: 'createEq', id: index, mdns: mdns});
-				return;
+			if(!useV2(index)) {
+				// Pas (ou plus) d'API v1 pour cet équipement : uniquement API v2 (batterie), ou API locale v1 non activée
+				// (nouvel équipement ajouté directement en v2). On crée l'équipement, ses valeurs arriveront après
+				// l'autorisation par le bouton (assistant).
+				const v1 = known[index].v1;
+				if(v2Supported.includes(type) && (v2Only.includes(type) || !v1 || v1.txt.api_enabled == 0)) {
+					jsend({eventType: 'createEq', id: index, mdns: mdns});
+				}
 			}
+			// l'équipement annonce l'API v2 (_homewizard._tcp) : Jeedom peut proposer la migration ou l'autorisation
+			// (envoyé après createEq : l'équipement doit exister dans Jeedom pour le retenir)
+			jsend({eventType: 'v2Available', id: index, mdns: mdns, supported: v2Supported.includes(type)});
 			// en API v1 c'est la réponse _hwenergy._tcp qui gère la connexion
 			if(!useV2(index)) {return;}
 		} else if(mdns.txt.api_enabled == 0 && !useV2(index)) {
-			console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...");
+			if(libHasV2 && v2Supported.includes(type)) {
+				Logger.log(index+" : API Locale (v1) pas activée dans l'application. Autorisez l'équipement en API v2 avec l'assistant du plugin, ou activez l'API Locale : Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);
+			} else {
+				console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...");
+			}
 			return;
 		}
 

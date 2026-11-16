@@ -88,7 +88,7 @@ $hwMigrationStart = init('eqLogic_id');
 			{{HomeWizard remplace son API locale v1 par l'API v2 : connexion chiffrée (https) et mesures poussées en temps réel par l'équipement.}}
 			{{Pour autoriser Jeedom, il faut appuyer une fois sur le bouton de l'équipement : l'assistant vous guide et attend votre appui.}}
 			{{Vos commandes sont conservées avec leur historique, vos scénarios et designs continuent de fonctionner.}}
-			{{Un équipement qui n'existe qu'en API v2 (Plug-In Battery) n'a rien à migrer : il a seulement besoin de cette autorisation pour envoyer ses valeurs.}}
+			{{Un nouvel équipement, ou un équipement qui n'existe qu'en API v2 (Plug-In Battery), n'a rien à migrer : il a seulement besoin de cette autorisation pour envoyer ses valeurs.}}
 		</div>
 		<a class="btn btn-success pull-right" id="bt_hwMigAll" style="display:none;"><i class="fas fa-magic"></i> {{Enchainer tous les équipements possibles}} (<span class="nb"></span>)</a>
 		<br /><br />
@@ -203,12 +203,11 @@ $hwMigrationStart = init('eqLogic_id');
 	var changed = false;
 	var states = {
 		v2: {label: 'success', text: "{{Migré en API v2}}"},
-		invalid: {label: 'danger', text: "{{Token refusé par l'équipement, migration à refaire}}"},
+		invalid: {label: 'danger', text: "{{Token refusé par l'équipement, autorisation à refaire}}"},
 		ready: {label: 'info', text: "{{Migration possible}}"},
-		// équipement uniquement API v2 (Plug-In Battery) : rien à migrer, il faut juste autoriser Jeedom par le bouton
+		// rien à migrer (Plug-In Battery, ou nouvel équipement ajouté directement en API v2) : il faut juste autoriser Jeedom par le bouton
 		pair: {label: 'info', text: "{{Autorisation nécessaire : appui sur le bouton de l'équipement}}"},
 		v2only: {label: 'success', text: "{{Autorisé (API v2 uniquement)}}"},
-		invalidonly: {label: 'danger', text: "{{Token refusé par l'équipement, autorisation à refaire}}"},
 		firmware: {label: 'warning', text: "{{L'équipement n'annonce pas l'API v2 : mettez son firmware à jour}}"},
 		unsupported: {label: 'default', text: "{{HomeWizard ne propose pas encore l'API v2 pour ce type}}"}
 	};
@@ -246,7 +245,6 @@ $hwMigrationStart = init('eqLogic_id');
 		list.forEach(function(eq) {
 			var state = states[eq.state] || states.unsupported;
 			if (eq.v2Only && eq.state == 'v2') { state = states.v2only; }
-			if (eq.v2Only && eq.state == 'invalid') { state = states.invalidonly; }
 			html += '<tr data-id="' + esc(eq.id) + '">';
 			html += '<td><img src="' + esc(eq.image) + '" /></td>';
 			html += '<td>' + eq.name + '</td>'; // getHumanName : déjà du html Jeedom
@@ -259,8 +257,8 @@ $hwMigrationStart = init('eqLogic_id');
 			html += '</td>';
 			html += '<td style="white-space:nowrap;">';
 			if (canStart(eq)) {
-				var action = (eq.v2Only) ? ((eq.state == 'invalid') ? "{{Refaire l'autorisation}}" : "{{Autoriser}}") : ((eq.state == 'invalid') ? "{{Refaire la migration}}" : "{{Migrer}}");
-				html += '<a class="btn btn-success btn-sm bt_hwMigStart"><i class="fas ' + ((eq.v2Only) ? 'fa-key' : 'fa-exchange-alt') + '"></i> ' + action + '</a> ';
+				var action = (eq.state == 'invalid') ? "{{Refaire l'autorisation}}" : ((eq.authOnly) ? "{{Autoriser}}" : "{{Migrer}}");
+				html += '<a class="btn btn-success btn-sm bt_hwMigStart"><i class="fas ' + ((eq.state == 'ready') ? 'fa-exchange-alt' : 'fa-key') + '"></i> ' + action + '</a> ';
 			}
 			if (eq.canRevert) {
 				html += '<a class="btn btn-default btn-xs bt_hwMigRevert"><i class="fas fa-undo"></i> {{Revenir à l\'API v1}}</a>';
@@ -387,8 +385,9 @@ $hwMigrationStart = init('eqLogic_id');
 		stopCountdown();
 		current = null;
 		changed = true;
-		$('#hwMig_doneTitle').text((eq.v2Only) ? "{{Autorisation réussie}}" : "{{Migration réussie}}");
-		$('#hwMig_doneText').text((eq.v2Only) ? "{{est maintenant autorisé, ses valeurs arrivent.}}" : "{{utilise maintenant l'API v2.}}");
+		var auth = (eq.authOnly || eq.state == 'invalid');
+		$('#hwMig_doneTitle').text((auth) ? "{{Autorisation réussie}}" : "{{Migration réussie}}");
+		$('#hwMig_doneText').text((auth) ? "{{est maintenant autorisé, ses valeurs arrivent.}}" : "{{utilise maintenant l'API v2.}}");
 		$('#hwMig_doneName').html(eq.name);
 		$('#hwMig_doneRenamed').text((renamed > 0) ? '(' + renamed + ' {{commandes renommées, historique conservé}})' : '');
 		queue = queue.filter(function(id) { return id != eq.id; });
@@ -407,7 +406,7 @@ $hwMigrationStart = init('eqLogic_id');
 		current = null;
 		if (!eq) { return; }
 		$('#bt_hwMigRetry').data('id', eq.id);
-		$('#hwMig_failTitle').text((reason == 'timeout') ? "{{Aucun appui détecté dans le temps imparti}}" : ((eq.v2Only) ? "{{L'autorisation n'a pas abouti}}" : "{{La migration n'a pas abouti}}"));
+		$('#hwMig_failTitle').text((reason == 'timeout') ? "{{Aucun appui détecté dans le temps imparti}}" : ((eq.authOnly || eq.state == 'invalid') ? "{{L'autorisation n'a pas abouti}}" : "{{La migration n'a pas abouti}}"));
 		$('#hwMig_failDetail').text((reason == 'timeout') ? '' : detail);
 		$('#hwMig_failHints').toggle(reason == 'timeout').find('[data-family]').hide().filter('[data-family=' + eq.family + ']').show();
 		showView('fail');
