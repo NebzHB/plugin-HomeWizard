@@ -21,6 +21,42 @@
     $('#md_modal').load('index.php?v=d&plugin=HomeWizard&modal=health').dialog('open');
 });
 
+function openMigrationHomeWizard(_eqLogicId) {
+    $('#md_modal').dialog({title: "{{Migration vers l'API v2 HomeWizard}}"});
+    $('#md_modal').load('index.php?v=d&plugin=HomeWizard&modal=migration' + ((_eqLogicId) ? '&eqLogic_id=' + _eqLogicId : '')).dialog('open');
+}
+
+$('#bt_migrationHomeWizard').on('click', function() {
+    openMigrationHomeWizard();
+});
+
+$('#bt_migrateEqLogic').on('click', function() {
+    if (modifyWithoutSave) {
+        jeedomUtils.showAlert({message: "{{Sauvegardez d'abord vos modifications}}", level: 'warning'});
+        return;
+    }
+    openMigrationHomeWizard($('.eqLogicAttr[data-l1key=id]').value());
+});
+
+// appelé par Jeedom à l'affichage d'un équipement
+function printEqLogic(_eqLogic) {
+    var conf = _eqLogic.configuration || {};
+    var isV2 = (conf.apiVersion == 'v2');
+    var v2Types = ['HWE-P1', 'SDM230-wifi', 'HWE-KWH1', 'SDM630-wifi', 'HWE-KWH3', 'HWE-BAT'];
+    var supported = (v2Types.indexOf(conf.type) >= 0);
+    var info = '';
+    $('#span_apiVersion').text((isV2) ? 'v2' : 'v1').toggleClass('label-success', isV2).toggleClass('label-default', !isV2);
+    if (isV2 && conf.tokenInvalid == 1) {
+        info = "{{Token refusé par l'équipement, migration à refaire}}";
+    } else if (!isV2 && !supported) {
+        info = "{{HomeWizard ne propose pas encore l'API v2 pour ce type}}";
+    } else if (!isV2 && conf.v2Available != 1) {
+        info = "{{L'équipement n'annonce pas l'API v2 : mettez son firmware à jour}}";
+    }
+    $('#span_apiInfo').text(info);
+    $('#bt_migrateEqLogic').toggle(supported && conf.v2Available == 1 && (!isV2 || conf.tokenInvalid == 1));
+}
+
 $('#bt_resetEqlogicSearch').on('click', function() {
   $('#in_searchEqlogic').val('');
   $('#in_searchEqlogic').keyup();
