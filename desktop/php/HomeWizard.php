@@ -29,6 +29,11 @@ $eqLogics = eqLogic::byType('HomeWizard');
 				</br />
 				<span>{{Santé}}</span>
 			</div>
+			<div class="cursor logoSecondary" id="bt_migrationHomeWizard" title="{{Assistant de migration des équipements vers l'API v2 de HomeWizard}}">
+				<i class="fas fa-exchange-alt"></i>
+				<br />
+				<span>{{Migration API v2}}</span>
+			</div>
 			<?php
 			$jeedomVersion=jeedom::version() ?? '0';
 			$displayInfo=version_compare($jeedomVersion, '4.4.0', '>=');
@@ -147,6 +152,14 @@ $eqLogics = eqLogic::byType('HomeWizard');
 									<label class="col-sm-3 control-label">{{Hostname}}</label>
 									<div class="col-sm-3">
 										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="hostname"></span>
+									</div>
+								</div>
+								<div class="form-group">
+									<label class="col-sm-3 control-label">{{API utilisée}}</label>
+									<div class="col-sm-9">
+										<span class="label label-default" id="span_apiVersion"></span>
+										<a class="btn btn-success btn-xs" id="bt_migrateEqLogic" style="display:none;margin-left:10px;"><i class="fas fa-exchange-alt"></i> <span class="txt">{{Migrer vers l'API v2}}</span></a>
+										<span id="span_apiInfo" style="margin-left:10px;"></span>
 									</div>
 								</div>
 								<div class="form-group">

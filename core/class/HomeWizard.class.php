@@ -20,6 +20,10 @@ require_once dirname(__FILE__) . '/../../../../core/php/core.inc.php';
 
 class HomeWizard extends eqLogic {
 	/***************************Attributs*******************************/	
+	public static $_encryptConfigKey = ['token'];
+	
+	const V2_PAIR_TIMEOUT = 120; // secondes laissées à l'utilisateur pour appuyer sur le bouton
+
 	public static function backupExclude() {
 		return ['resources/node_modules'];
 	}
@@ -80,10 +84,52 @@ class HomeWizard extends eqLogic {
 						"hostname"=>$mdns['hostname'],
 						"type"=>$mdns['txt']['product_type'],
 						"serial"=>$mdns['txt']['serial'],
-						"firmware_version"=>$mdns['firmware_version'],
+						"firmware_version"=>$mdns['firmware_version'] ?? null,
 					]
 				];
+				// un équipement uniquement API v2 pas encore appairé ne donne pas son firmware
+				$eq['configuration']=array_filter($eq['configuration'],function($v) { return $v !== null; });
 				self::createEq($eq);
+			break;
+			case 'v2Available':
+				// l'équipement s'annonce sur _homewizard._tcp : son firmware supporte l'API v2
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
+				if (is_object($eqp)) {
+					$apiVersion = $data['mdns']['txt']['api_version'] ?? '';
+					if ($eqp->getConfiguration('v2Available') != 1 || $eqp->getConfiguration('v2ApiVersion') != $apiVersion) {
+						log::add('HomeWizard', 'info', __("API v2 disponible sur", __FILE__).' '.$eqp->getName().' ('.$apiVersion.')');
+						$eqp->setConfiguration('v2Available', 1);
+						$eqp->setConfiguration('v2ApiVersion', $apiVersion);
+						$eqp->save(true);
+					}
+				}
+			break;
+			case 'pairResult':
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
+				if (!is_object($eqp)) {
+					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id", __FILE__).' '.$data['id']);
+					break;
+				}
+				if ($data['result'] == 'ok' && !empty($data['token'])) {
+					$renamed = $eqp->migrateToV2($data['token'], $data['userName'] ?? '');
+					if (in_array($eqp->getConfiguration('type'), self::v2OnlyTypes())) {
+						log::add('HomeWizard', 'info', __("Jeedom est autorisé sur", __FILE__).' '.$eqp->getName());
+					} else {
+						log::add('HomeWizard', 'info', __("Migration vers l'API v2 réussie pour", __FILE__).' '.$eqp->getName().' ('.$renamed.' '.__("commandes renommées", __FILE__).')');
+					}
+					event::add('HomeWizard::pairResult', ['id'=>$eqp->getId(), 'result'=>'ok', 'renamed'=>$renamed]);
+				} else {
+					log::add('HomeWizard', 'info', __("Appui sur le bouton non abouti pour", __FILE__).' '.$eqp->getName().' : '.($data['reason'] ?? '').' '.($data['error'] ?? ''));
+					event::add('HomeWizard::pairResult', ['id'=>$eqp->getId(), 'result'=>'ko', 'reason'=>$data['reason'] ?? 'error', 'error'=>$data['error'] ?? '']);
+				}
+			break;
+			case 'tokenInvalid':
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
+				if (is_object($eqp) && $eqp->getConfiguration('tokenInvalid') != 1) {
+					log::add('HomeWizard', 'error', __("Le token de l'API v2 n'est plus valide, refaites l'autorisation (assistant Migration API v2) de l'équipement", __FILE__).' '.$eqp->getName());
+					$eqp->setConfiguration('tokenInvalid', 1);
+					$eqp->save(true);
+				}
 			break;
 			case 'updateValue':
 				$logical=$data['id'];
@@ -92,18 +138,29 @@ class HomeWizard extends eqLogic {
 					$val=$data['value'];
 					log::add('HomeWizard','debug',json_encode($val));
 					$hasNewCmd=false;
+					$isV2=($eqp->getConfiguration('apiVersion') == 'v2');
 					foreach($val as $key=>$value) {
+						// équipement migré : une valeur API v1 encore en transit ne doit pas recréer les anciennes commandes
+						if($isV2 && self::v2LogicalId($key) != $key) continue;
 						$newCmd = $eqp->getCmd(null, $key);
 						if (!is_object($newCmd)) {
 							$keyPart=explode('_',$key);
 							$unite='';
-							if(count($keyPart) >2) {
-								$unite = $keyPart[count($keyPart)-1];
+							// unités connues (les noms de l'API v2 sont plus courts : power_w, voltage_v...)
+							$knownUnits=['kwh'=>'kWh','w'=>'W','v'=>'V','a'=>'A','va'=>'VA','var'=>'VAR','hz'=>'Hz','lpm'=>'L/min','m3'=>'m³','pct'=>'%','db'=>'dB'];
+							$lastPart=$keyPart[count($keyPart)-1];
+							if(count($keyPart) >1 && isset($knownUnits[$lastPart])) {
+								$unite=$knownUnits[$lastPart];
+							} elseif(count($keyPart) >2) {
+								$unite = $lastPart;
 								switch($unite) {
 									case 'timestamp':
 									case 'factor':
 									case 'count':
 									case 'id':
+									case 'l1':
+									case 'l2':
+									case 'l3':
 										$unite='';
 									break;
 									case 'kwh':
@@ -142,13 +199,13 @@ class HomeWizard extends eqLogic {
 									"mobile"=>'line'
 								]
 							];
-							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp') $cmd['subtype']='string';
+							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id') $cmd['subtype']='string';
 							if($key == 'wifi_strength') $cmd['unite']='%';
 							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
 							if($key == 'brightness') {
 								unset($cmd['template']);
 							}
-							if($key == 'total_power_import_kwh' || $key == 'total_power_export_kwh' || $key == 'active_power_w') {
+							if($key == 'total_power_import_kwh' || $key == 'total_power_export_kwh' || $key == 'active_power_w' || $key == 'energy_import_kwh' || $key == 'energy_export_kwh' || $key == 'power_w') {
 								$cmd['template']['dashboard']='tile';
 								$cmd['template']['mobile']='tile';
 							}
@@ -160,12 +217,19 @@ class HomeWizard extends eqLogic {
 										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/Y H:i:s');
 									}
 								break;
+								case 'monthly_power_peak_timestamp': // API v2 : 2024-06-04T10:11:22
+									$date = DateTime::createFromFormat('Y-m-d\\TH:i:s', $value);
+									if ($date !== false) {
+										$value = $date->format('d/m/Y H:i:s');
+									}
+								break;
 								case 'gaz_timestamp':
 									if (preg_match('/^\d{12}$/', $value)) {
 										$value = DateTime::createFromFormat('ymdHis', $value)->format('d/m/Y H:i:s');
 									}
 								break;
 								case 'active_tariff':
+								case 'tariff': // API v2
 									switch($value) {
 										case '1':
 											$txt=__("HP", __FILE__);
@@ -177,7 +241,7 @@ class HomeWizard extends eqLogic {
 											$txt=__("Inconnu", __FILE__).'('.$value.')';
 										break;
 									}
-									$eqp->checkAndUpdateCmd('active_tariff_txt',$txt);
+									$eqp->checkAndUpdateCmd(($key == 'tariff')?'tariff_txt':'active_tariff_txt',$txt);
 								break;
 							}
 							$eqp->checkAndUpdateCmd($key,$value);
@@ -191,7 +255,9 @@ class HomeWizard extends eqLogic {
 			case 'daemonReady':
 				$pollingIntervals = config::byKey('pollPeriods', 'HomeWizard', ["HWE-P1"=>0], true);
 				$config=[
-					"pollingIntervals" => $pollingIntervals
+					"pollingIntervals" => $pollingIntervals,
+					"devices" => self::v2Devices(),
+					"userName" => self::v2UserName()
 				];
 				HomeWizard::hwConfig('initConfig',["value"=>$config]);
 			break;
@@ -271,6 +337,11 @@ class HomeWizard extends eqLogic {
 		
 		    $depDetails = json_decode($depPackageJson, true);
 		    $installedVersion = $depDetails['version'];
+		
+		    // dépendance installée depuis GitHub : pas de version dans la spec, la version minimale est dans githubMinVersions
+		    if (strpos($requiredVersionSpec, 'github:') === 0) {
+		        $requiredVersionSpec = $packageRequiredVers['githubMinVersions'][$dep] ?? '>=0';
+		    }
 		
 		    preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $requiredVersionSpec, $matches);
 		    $requiredOperator = $matches[1] ?: '==';
@@ -427,6 +498,264 @@ class HomeWizard extends eqLogic {
 		}
 	}	
 	
+	/************************** API v2 **********************************/
+
+	/* Equipements pour lesquels HomeWizard a publié l'API v2 */
+	public static function v2SupportedTypes() {
+		return ['HWE-P1', 'SDM230-wifi', 'HWE-KWH1', 'SDM630-wifi', 'HWE-KWH3', 'HWE-BAT'];
+	}
+
+	/* Equipements qui n'existent qu'en API v2 */
+	public static function v2OnlyTypes() {
+		return ['HWE-BAT'];
+	}
+
+	/* Famille d'équipement, pour l'illustration et la consigne du bouton dans l'assistant de migration */
+	public static function v2Family($type) {
+		switch($type) {
+			case 'HWE-P1':
+				return 'p1';
+			case 'SDM230-wifi':
+			case 'HWE-KWH1':
+			case 'SDM630-wifi':
+			case 'HWE-KWH3':
+				return 'kwh';
+			case 'HWE-BAT':
+				return 'bat';
+		}
+		return '';
+	}
+
+	/*
+	 * Illustration de l'assistant de migration : l'image officielle de l'équipement avec la position de son bouton
+	 * (x et y en % de l'image), sur laquelle un doigt animé est superposé.
+	 * Sans position connue (nouveau type) : l'image seule, sans animation.
+	 */
+	public static function v2PairingIllustration($type) {
+		$buttons = [
+			'HWE-P1'=>[50, 69], // le bouton est la face ronde, au centre de l'anneau lumineux
+			'HWE-KWH1'=>[39.3, 61.3], // touche wifi
+			'HWE-KWH3'=>[75.7, 36.7], // touche wifi
+			'SDM230-wifi'=>[40.7, 61.7], // touche wifi
+			'SDM630-wifi'=>[75.7, 36.7], // touche wifi
+			'HWE-BAT'=>[41.7, 42.3], // bouton rond au dessus des leds
+			// pas encore d'API v2, prêt pour plus tard
+			'HWE-WTR'=>[67, 32.5],
+			'HWE-SKT'=>[80, 42],
+		];
+		$image = 'plugins/HomeWizard/core/config/img/'.$type.'.png';
+		$hold = (self::v2Family($type) == 'kwh');
+		if (!file_exists(dirname(__FILE__).'/../../../../'.$image)) {
+			return ['image'=>'plugins/HomeWizard/plugin_info/HomeWizard_icon.png', 'x'=>null, 'y'=>null, 'hold'=>$hold];
+		}
+		if (!isset($buttons[$type])) {
+			return ['image'=>$image, 'x'=>null, 'y'=>null, 'hold'=>$hold];
+		}
+		return ['image'=>$image, 'x'=>$buttons[$type][0], 'y'=>$buttons[$type][1], 'hold'=>$hold];
+	}
+
+	/*
+	 * Commandes qui ne seront plus mises à jour après la migration : l'API v2 des kWh meters ne donne plus
+	 * les index par tarif (total_power_import_t1_kwh...), seulement les totaux.
+	 */
+	public function v2StaleCmds() {
+		$return = [];
+		if (self::v2Family($this->getConfiguration('type')) != 'kwh') return $return;
+		foreach($this->getCmd('info') as $cmd) {
+			if (preg_match('/^(total_power|energy)_(import|export)_t\d_kwh$/', $cmd->getLogicalId())) {
+				$return[] = $cmd->getName();
+			}
+		}
+		return $return;
+	}
+
+	/* Nom de l'utilisateur créé sur les équipements. Unique par Jeedom : deux Jeedom avec le même nom s'invalideraient leur token */
+	public static function v2UserName() {
+		$name = config::byKey('v2UserName', 'HomeWizard', '');
+		if ($name == '') {
+			$name = 'jeedom-'.bin2hex(random_bytes(4));
+			config::save('v2UserName', $name, 'HomeWizard');
+		}
+		return $name;
+	}
+
+	/* Equipements migrés en API v2, envoyés au démon */
+	public static function v2Devices() {
+		$devices = [];
+		foreach(eqLogic::byType('HomeWizard') as $eqp) {
+			if ($eqp->getConfiguration('apiVersion') == 'v2' && $eqp->getConfiguration('token') != '') {
+				$devices[$eqp->getLogicalId()] = ['apiVersion'=>'v2', 'token'=>$eqp->getConfiguration('token')];
+			}
+		}
+		return $devices;
+	}
+
+	/* LogicalId d'une commande de l'API v1 dans l'API v2 (les données ont changé de nom) */
+	public static function v2LogicalId($logicalId) {
+		$specific = [
+			'smr_version'=>'protocol_version',
+			'active_tariff'=>'tariff',
+			'active_tariff_txt'=>'tariff_txt',
+			'active_power_average_w'=>'average_power_15m_w',
+			'montly_power_peak_w'=>'monthly_power_peak_w',
+			'montly_power_peak_timestamp'=>'monthly_power_peak_timestamp',
+			'active_liter_lpm'=>'active_liter_lpm', // Watermeter : pas encore d'API v2
+		];
+		if (isset($specific[$logicalId])) return $specific[$logicalId];
+		// total_power_import_t1_kwh => energy_import_t1_kwh
+		if (strpos($logicalId, 'total_power_') === 0) return 'energy_'.substr($logicalId, 12);
+		// active_power_l1_w => power_l1_w, active_voltage_v => voltage_v...
+		if (strpos($logicalId, 'active_') === 0) return substr($logicalId, 7);
+		return $logicalId;
+	}
+
+	/* L'inverse, pour le retour à l'API v1 */
+	public static function v1LogicalId($logicalId) {
+		$specific = [
+			'protocol_version'=>'smr_version',
+			'tariff'=>'active_tariff',
+			'tariff_txt'=>'active_tariff_txt',
+			'average_power_15m_w'=>'active_power_average_w',
+			'monthly_power_peak_w'=>'montly_power_peak_w',
+			'monthly_power_peak_timestamp'=>'montly_power_peak_timestamp',
+			'power_on'=>'power_on', // Energy Socket : pas encore d'API v2
+		];
+		if (isset($specific[$logicalId])) return $specific[$logicalId];
+		if (strpos($logicalId, 'energy_') === 0) return 'total_power_'.substr($logicalId, 7);
+		// voltage_sag_* et voltage_swell_* ont le même nom dans les deux API
+		if (preg_match('/^(power|voltage|current|frequency|apparent|reactive)_/', $logicalId) && !preg_match('/^voltage_(sag|swell)_/', $logicalId)) return 'active_'.$logicalId;
+		return $logicalId;
+	}
+
+	/* Liste des équipements et de leur état de migration, pour l'assistant */
+	public static function migrationList() {
+		$return = [];
+		foreach(eqLogic::byType('HomeWizard') as $eqp) {
+			$type = $eqp->getConfiguration('type');
+			$return[] = [
+				'id'=>$eqp->getId(),
+				'name'=>$eqp->getHumanName(),
+				'type'=>$type,
+				'image'=>$eqp->getImage(),
+				'isEnable'=>$eqp->getIsEnable(),
+				'family'=>self::v2Family($type),
+				'state'=>$eqp->getMigrationState(),
+				'canRevert'=>($eqp->getConfiguration('apiVersion') == 'v2' && !in_array($type, self::v2OnlyTypes())),
+				'apiVersion'=>(in_array($type, self::v2OnlyTypes()))?'v2':$eqp->getConfiguration('apiVersion', 'v1'),
+				'v2ApiVersion'=>$eqp->getConfiguration('v2ApiVersion'),
+				'staleCmds'=>$eqp->v2StaleCmds(),
+				'v2Only'=>in_array($type, self::v2OnlyTypes()),
+				'authOnly'=>($eqp->getMigrationState() == 'pair')
+			];
+		}
+		return $return;
+	}
+
+	/*
+	 * v2 : déjà migré, invalid : migré mais le token n'est plus accepté, ready : migration possible,
+	 * pair : rien à migrer (équipement uniquement API v2, ou nouvel équipement sans commande API v1), il attend seulement
+	 *        l'autorisation par son bouton,
+	 * firmware : type supporté mais l'équipement n'annonce pas (encore) l'API v2, unsupported : pas d'API v2 pour ce type
+	 */
+	public function getMigrationState() {
+		$type = $this->getConfiguration('type');
+		if ($this->getConfiguration('apiVersion') == 'v2') {
+			return ($this->getConfiguration('tokenInvalid') == 1)?'invalid':'v2';
+		}
+		if (in_array($type, self::v2OnlyTypes())) return 'pair';
+		if (!in_array($type, self::v2SupportedTypes())) return 'unsupported';
+		if ($this->getConfiguration('v2Available') != 1) return 'firmware';
+		// nouvel équipement jamais utilisé en API v1 (API locale non activée) : rien à migrer, on l'autorise directement en v2
+		if (!$this->hasV1Cmds()) return 'pair';
+		return 'ready';
+	}
+
+	/* L'équipement a des commandes de l'API v1, donc quelque chose à migrer */
+	public function hasV1Cmds() {
+		foreach($this->getCmd() as $cmd) {
+			if (self::v2LogicalId($cmd->getLogicalId()) != $cmd->getLogicalId()) return true;
+		}
+		return false;
+	}
+
+	/* Demande au démon d'attendre l'appui sur le bouton de l'équipement */
+	public function startPairing() {
+		$state = $this->getMigrationState();
+		if (!in_array($state, ['ready', 'pair', 'invalid'])) {
+			throw new Exception(__("L'API v2 n'est pas disponible pour cet équipement", __FILE__).' ('.$state.')');
+		}
+		$result = self::hwExecute('pair', ['id'=>$this->getLogicalId(), 'timeout'=>self::V2_PAIR_TIMEOUT]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		if ($result['result'] != 'ok') {
+			throw new Exception($result['error'] ?? __("Erreur du démon", __FILE__));
+		}
+		return [
+			'timeout'=>$result['timeout'] ?? self::V2_PAIR_TIMEOUT,
+			'family'=>self::v2Family($this->getConfiguration('type')),
+			'illustration'=>self::v2PairingIllustration($this->getConfiguration('type')),
+			'staleCmds'=>$this->v2StaleCmds()
+		];
+	}
+
+	public function cancelPairing() {
+		self::hwExecute('pairCancel', ['id'=>$this->getLogicalId()]);
+		return true;
+	}
+
+	/* Renomme les logicalId (et les noms non personnalisés) des commandes, l'id donc l'historique et les scénarios sont conservés */
+	public function renameCmdsForApi($toV2 = true) {
+		$renamed = 0;
+		foreach($this->getCmd() as $cmd) {
+			$old = $cmd->getLogicalId();
+			$new = ($toV2)?self::v2LogicalId($old):self::v1LogicalId($old);
+			if ($new == $old) continue;
+			if (is_object($this->getCmd(null, $new))) {
+				log::add('HomeWizard', 'debug', __("Commande non renommée, existe déjà", __FILE__).' : '.$old.' => '.$new);
+				continue;
+			}
+			log::add('HomeWizard', 'debug', __("Commande renommée", __FILE__).' : '.$old.' => '.$new);
+			$cmd->setLogicalId($new);
+			// le nom ne suit que si l'utilisateur ne l'a pas personnalisé
+			if ($cmd->getName() == ucfirst($old) && !$this->cmdNameExist(ucfirst($new))) {
+				$cmd->setName(ucfirst($new));
+			}
+			$cmd->save();
+			$renamed++;
+		}
+		return $renamed;
+	}
+
+	public function migrateToV2($token, $userName = '') {
+		$this->setConfiguration('apiVersion', 'v2');
+		$this->setConfiguration('token', $token);
+		$this->setConfiguration('v2UserName', $userName);
+		$this->setConfiguration('tokenInvalid', 0);
+		$this->save(true);
+		$renamed = $this->renameCmdsForApi(true);
+		$this->save(); // postSave : commandes additionnelles avec leur nom API v2
+		return $renamed;
+	}
+
+	/* Retour à l'API v1 : l'utilisateur créé sur l'équipement est supprimé par le démon */
+	public function revertToV1() {
+		if (in_array($this->getConfiguration('type'), self::v2OnlyTypes())) {
+			throw new Exception(__("Cet équipement n'existe qu'en API v2", __FILE__));
+		}
+		$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId()]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		$this->setConfiguration('apiVersion', 'v1');
+		$this->setConfiguration('token', '');
+		$this->setConfiguration('tokenInvalid', 0);
+		$this->save(true);
+		$renamed = $this->renameCmdsForApi(false);
+		$this->save();
+		return ['renamed'=>$renamed, 'userDeleted'=>$result['userDeleted'] ?? false];
+	}
+
 	public static function devicesParameters($device = '') {
 		$path = dirname(__FILE__) . '/../config/devices/' . $device;
 		if (!is_dir($path)) {
@@ -531,12 +860,12 @@ class HomeWizard extends eqLogic {
 				$result = $request_http->exec(60, 1);
 				$json = json_decode($result, true);
 			} catch(Exception $e) {
-				log::add('HomeWizard', 'warning', __("Problème de communication avec le démon à la demande", __FILE__).' :'. $url . ' Exception : ' . $e);
+				log::add('HomeWizard', 'warning', __("Problème de communication avec le démon à la demande", __FILE__).' :'. preg_replace('/token%5D=[^&]*/', 'token%5D=***', $url) . ' Exception : ' . $e);
 			} catch(Error $e) {
-				log::add('HomeWizard', 'warning', __("Problème de communication avec le démon à la demande", __FILE__).' :'. $url . ' Error : ' . $e);
+				log::add('HomeWizard', 'warning', __("Problème de communication avec le démon à la demande", __FILE__).' :'. preg_replace('/token%5D=[^&]*/', 'token%5D=***', $url) . ' Error : ' . $e);
 			}
 			if ($json === null) {
-				log::add('HomeWizard', 'debug', __("Le démon n'a rien répondu à la demande", __FILE__).' :'. $url);
+				log::add('HomeWizard', 'debug', __("Le démon n'a rien répondu à la demande", __FILE__).' :'. preg_replace('/token%5D=[^&]*/', 'token%5D=***', $url));
 			}
 			if ($json['result'] != 'ok') {
 				log::add('HomeWizard', 'debug', __("Erreur du démon", __FILE__) .': '. $json['msg']);
@@ -679,6 +1008,15 @@ class HomeWizard extends eqLogic {
 				$content=translate::exec($content,realpath($base.$eqConfig));
 			}
 			$extraConfig=json_decode($content,true);
+			if($this->getConfiguration('apiVersion') == 'v2') {
+				// les fichiers de config utilisent les noms de l'API v1
+				foreach(['modifyCommands','additionnalCommands'] as $section) {
+					foreach($extraConfig[$section] as $i => $cmdConfig) {
+						$extraConfig[$section][$i]['logicalId']=self::v2LogicalId($cmdConfig['logicalId']);
+						if(isset($cmdConfig['value'])) $extraConfig[$section][$i]['value']=self::v2LogicalId($cmdConfig['value']);
+					}
+				}
+			}
 			foreach($extraConfig['modifyCommands'] as $cmdModif) {
 				$existCmd = $this->getCmd(null, $cmdModif['logicalId']);
 				if (is_object($existCmd)) {
