@@ -107,6 +107,26 @@ $hwMigrationStart = init('eqLogic_id');
 		</table>
 	</div>
 
+	<!-- Utilisateurs (autorisations) enregistrés sur un équipement en API v2 -->
+	<div class="hwMig_view" data-view="users">
+		<h3><i class="fas fa-users"></i> {{Utilisateurs autorisés sur}} <span id="hwMig_usersName"></span></h3>
+		<div class="alert alert-info">
+			{{Chaque application autorisée sur l'équipement y a son utilisateur. L'équipement ne donne que leur nom (ni adresse IP, ni date) : l'origine est déduite de ce nom.}}
+			{{Supprimer un utilisateur coupe immédiatement l'accès de l'application qui l'utilise.}}
+		</div>
+		<table class="table table-condensed" id="table_hwMigUsers">
+			<thead>
+				<tr>
+					<th>{{Utilisateur}}</th>
+					<th>{{Origine}}</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+		<a class="btn btn-default" id="bt_hwMigUsersBack"><i class="fas fa-list"></i> {{Retour à la liste}}</a>
+	</div>
+
 	<!-- Etape 2 : attente de l'appui sur le bouton -->
 	<div class="hwMig_view" data-view="press">
 		<div class="hwMig_press">
@@ -232,7 +252,7 @@ $hwMigrationStart = init('eqLogic_id');
 	}
 
 	function showView(view) {
-		var step = {list: 1, press: 2, done: 3, fail: 2}[view];
+		var step = {list: 1, users: 1, press: 2, done: 3, fail: 2}[view];
 		$('#div_hwMigration .hwMig_view').removeClass('active').filter('[data-view=' + view + ']').addClass('active');
 		$('#div_hwMigration .hwMig_step').each(function() {
 			var n = $(this).data('step');
@@ -259,6 +279,9 @@ $hwMigrationStart = init('eqLogic_id');
 			if (canStart(eq)) {
 				var action = (eq.state == 'invalid') ? "{{Refaire l'autorisation}}" : ((eq.authOnly) ? "{{Autoriser}}" : "{{Migrer}}");
 				html += '<a class="btn btn-success btn-sm bt_hwMigStart"><i class="fas ' + ((eq.state == 'ready') ? 'fa-exchange-alt' : 'fa-key') + '"></i> ' + action + '</a> ';
+			}
+			if (eq.state == 'v2') {
+				html += '<a class="btn btn-default btn-xs bt_hwMigUsers"><i class="fas fa-users"></i> {{Utilisateurs}}</a> ';
 			}
 			if (eq.canRevert) {
 				html += '<a class="btn btn-default btn-xs bt_hwMigRevert"><i class="fas fa-undo"></i> {{Revenir à l\'API v1}}</a>';
@@ -289,6 +312,52 @@ $hwMigrationStart = init('eqLogic_id');
 					renderList();
 				}
 				if (callback) { callback(); }
+			}
+		});
+	}
+
+	var usersEq = null; // équipement dont on affiche les utilisateurs
+	var origins = {
+		current: {label: 'success', text: "{{Ce Jeedom}}"},
+		jeedom: {label: 'info', text: "{{Un autre Jeedom}}"},
+		cloud: {label: 'warning', text: "{{Application HomeWizard (cloud)}}"},
+		local: {label: 'default', text: "{{Autre application locale}}"}
+	};
+
+	function renderUsers(users) {
+		var html = '';
+		users.forEach(function(user) {
+			var origin = origins[user.origin] || origins.local;
+			html += '<tr data-name="' + esc(user.name) + '" data-origin="' + esc(user.origin) + '">';
+			html += '<td>' + esc(user.name) + '</td>';
+			html += '<td><span class="label label-' + origin.label + '">' + origin.text + '</span></td>';
+			html += '<td>';
+			if (user.origin != 'current') {
+				html += '<a class="btn btn-danger btn-xs bt_hwMigUserDelete"><i class="fas fa-trash"></i> {{Supprimer}}</a>';
+			}
+			html += '</td></tr>';
+		});
+		$('#table_hwMigUsers tbody').html(html);
+	}
+
+	function usersRequest(data) {
+		$.ajax({
+			type: 'POST',
+			url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
+			data: data,
+			dataType: 'json',
+			global: false,
+			error: function(request, status, error) {
+				handleAjaxError(request, status, error);
+			},
+			success: function(result) {
+				if (result.state != 'ok') {
+					jeedomUtils.showAlert({ message: result.result, level: 'danger' });
+					return;
+				}
+				$('#hwMig_usersName').html(usersEq.name);
+				renderUsers(result.result);
+				showView('users');
 			}
 		});
 	}
@@ -425,6 +494,18 @@ $hwMigrationStart = init('eqLogic_id');
 	$('#div_hwMigration').off('click').on('click', '.bt_hwMigStart', function() {
 		queue = [];
 		startPairing($(this).closest('tr').data('id'));
+	}).on('click', '.bt_hwMigUsers', function() {
+		usersEq = byId($(this).closest('tr').data('id'));
+		usersRequest({ action: 'listUsers', id: usersEq.id });
+	}).on('click', '.bt_hwMigUserDelete', function() {
+		var tr = $(this).closest('tr');
+		var name = tr.data('name');
+		var dialog = (typeof jeeDialog !== 'undefined') ? jeeDialog : bootbox;
+		var warning = (tr.data('origin') == 'cloud') ? " {{C'est un utilisateur de l'application HomeWizard : elle peut perdre l'accès à cet équipement.}}" : '';
+		dialog.confirm("{{Supprimer cet utilisateur de l'équipement ?}} " + esc(name) + warning, function(result) {
+			if (!result) { return; }
+			usersRequest({ action: 'deleteUser', id: usersEq.id, name: name });
+		});
 	}).on('click', '.bt_hwMigRevert', function() {
 		var id = $(this).closest('tr').data('id');
 		var dialog = (typeof jeeDialog !== 'undefined') ? jeeDialog : bootbox;
@@ -466,7 +547,7 @@ $hwMigrationStart = init('eqLogic_id');
 	$('#bt_hwMigRetry').off('click').on('click', function() {
 		startPairing($(this).data('id'));
 	});
-	$('#bt_hwMigBackDone, #bt_hwMigBackFail').off('click').on('click', function() {
+	$('#bt_hwMigBackDone, #bt_hwMigBackFail, #bt_hwMigUsersBack').off('click').on('click', function() {
 		queue = [];
 		refreshList(function() { showView('list'); });
 	});

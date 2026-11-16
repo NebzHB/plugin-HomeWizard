@@ -32,27 +32,45 @@ class HomeWizard extends eqLogic {
 	}
 
 	/*
-	 * La commande Online suit les messages reçus de l'équipement : le démon la passe à 0 après 3 cycles sans message et à 1
-	 * au message suivant. Ici, simple filet de sécurité pour ce que le démon ne voit pas : un équipement qu'il n'a jamais
-	 * revu depuis son démarrage, ou un démon arrêté.
+	 * Commande Online : le démon la passe à 0 après 3 cycles sans message de l'équipement et à 1 au message suivant.
+	 * Ici, ce que le démon ne peut pas faire lui-même :
+	 * - démon arrêté : tous les équipements sont hors ligne
+	 * - équipement silencieux qui ne répond plus au ping : hors ligne
+	 * - équipement sans aucun message depuis 5 minutes (jamais revu depuis le démarrage du démon...) : hors ligne
 	 */
 	public static function cron5() {
 		$deamon_info = self::deamon_info();
-		$daemonStart = cache::byKey('HomeWizard::daemonStart')->getValue(0);
+		if ($deamon_info['state'] != 'ok') {
+			self::setAllOffline();
+			return;
+		}
 		// on laisse au démon le temps de retrouver les équipements après son démarrage
-		if ($deamon_info['state'] == 'ok' && (time() - $daemonStart) < 300) return;
+		if ((time() - cache::byKey('HomeWizard::daemonStart')->getValue(0)) < 300) return;
 		$pollPeriods = config::byKey('pollPeriods', 'HomeWizard', [], true);
 		foreach(eqLogic::byType('HomeWizard', true) as $HomeWizard) {
 			$onlineCmd = $HomeWizard->getCmd(null, 'online');
 			if (!is_object($onlineCmd) || $onlineCmd->execCmd() != 1) continue;
 			$period = intval($pollPeriods[$HomeWizard->getConfiguration('type')] ?? 0);
-			$limit = max(300, 3 * (($period >= 100) ? $period : 5000) / 1000);
-			$lastSeen = cache::byKey('HomeWizard::lastSeen::'.$HomeWizard->getId())->getValue(0);
-			if ($deamon_info['state'] == 'ok' && (time() - $lastSeen) <= $limit) continue;
-			log::add('HomeWizard', 'debug', __("Hors ligne, aucun message reçu", __FILE__) .': '. $HomeWizard->getName());
+			$cycles = max(10, 3 * (($period >= 100) ? $period : 5000) / 1000);
+			$silence = time() - cache::byKey('HomeWizard::lastSeen::'.$HomeWizard->getId())->getValue(0);
+			if ($silence <= $cycles) continue;
+			// silencieux depuis plus de 3 cycles : le ping tranche, sauf au-delà de 5 minutes où le silence suffit
+			if ($silence <= 300 && $HomeWizard->pingHost($HomeWizard->getConfiguration('address')) == true) continue;
+			log::add('HomeWizard', 'debug', __("Hors ligne", __FILE__) .': '. $HomeWizard->getName());
 			$HomeWizard->checkAndUpdateCmd('online', 0);
 		}
 	}
+
+	/* Démon arrêté : plus aucune valeur ne remonte, les équipements sont hors ligne */
+	public static function setAllOffline() {
+		foreach(eqLogic::byType('HomeWizard') as $HomeWizard) {
+			$onlineCmd = $HomeWizard->getCmd(null, 'online');
+			if (is_object($onlineCmd) && $onlineCmd->execCmd() != 0) {
+				$HomeWizard->checkAndUpdateCmd('online', 0);
+			}
+		}
+	}
+
 	public static function getConfigForCommunity()
 	{
 		$update=update::byTypeAndLogicalId('plugin',__CLASS__);
@@ -224,9 +242,9 @@ class HomeWizard extends eqLogic {
 									"mobile"=>'line'
 								]
 							];
-							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id') $cmd['subtype']='string';
+							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id' || $key == 'batteries_mode') $cmd['subtype']='string';
 							if($key == 'wifi_strength') $cmd['unite']='%';
-							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
+							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full') $cmd['subtype']='binary';
 							if($key == 'brightness') {
 								unset($cmd['template']);
 							}
@@ -272,6 +290,8 @@ class HomeWizard extends eqLogic {
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
+					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
+					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
 					if($hasNewCmd) $eqp->save();
 				} else {
 					log::add('HomeWizard','warning',__("Aucun équipement trouvé avec l'id", __FILE__).' '.$logical);
@@ -490,6 +510,7 @@ class HomeWizard extends eqLogic {
 		$deamon_info = self::deamon_info();
 		if ($deamon_info['state'] == 'ok') {
 			log::add('HomeWizard', 'info', __("Arrêt du démon", __FILE__).' '.'HomeWizard');
+			self::setAllOffline();
 			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
 			$request_http = new com_http($url);
 			$request_http->setNoReportError(true);
@@ -625,7 +646,7 @@ class HomeWizard extends eqLogic {
 		config::save('v2MachineId', $current, 'HomeWizard');
 		if ($stored == '') return false; // première exécution
 		log::add('HomeWizard', 'info', __("Ce Jeedom est une copie d'un autre (machine différente) : nouveau nom d'autorisation API v2", __FILE__));
-		config::save('v2UserName', 'jeedom-'.bin2hex(random_bytes(4)), 'HomeWizard');
+		config::save('v2UserName', self::v2NewUserName(), 'HomeWizard');
 		foreach(eqLogic::byType('HomeWizard') as $eqp) {
 			if ($eqp->getConfiguration('apiVersion') == 'v2' && $eqp->getConfiguration('token') != '') {
 				$eqp->setConfiguration('tokenShared', 1);
@@ -647,12 +668,84 @@ class HomeWizard extends eqLogic {
 		}
 	}
 
+	/*
+	 * Nouveau nom d'utilisateur : jeedom-<nom du Jeedom>-<aléatoire>. Le nom du Jeedom permet de reconnaitre qui a créé
+	 * l'utilisateur dans la liste des utilisateurs d'un équipement (l'API ne donne ni IP ni date, seulement ce nom).
+	 * Caractères acceptés par l'API : lettres, chiffres, - et _ (40 caractères maximum après local/).
+	 */
+	public static function v2NewUserName() {
+		$jeedomName = preg_replace('/[^a-zA-Z0-9_-]/', '', str_replace(' ', '-', (string) config::byKey('name')));
+		$jeedomName = trim(substr($jeedomName, 0, 20), '-');
+		return 'jeedom-'.(($jeedomName != '') ? $jeedomName.'-' : '').bin2hex(random_bytes(4));
+	}
+
+	/* Utilisateurs (autorisations) enregistrés sur l'équipement, avec leur origine déduite du nom */
+	public function v2Users() {
+		$result = self::hwExecute('users', ['id'=>$this->getLogicalId()]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		if ($result['result'] != 'ok') {
+			throw new Exception($result['error'] ?? __("Erreur du démon", __FILE__));
+		}
+		return self::v2DescribeUsers($result['users'] ?? []);
+	}
+
+	public function v2DeleteUser($name) {
+		$result = self::hwExecute('userDelete', ['id'=>$this->getLogicalId(), 'name'=>$name]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		if ($result['result'] != 'ok') {
+			throw new Exception($result['error'] ?? __("Erreur du démon", __FILE__));
+		}
+		return self::v2DescribeUsers($result['users'] ?? []);
+	}
+
+	public static function v2DescribeUsers($users) {
+		$return = [];
+		foreach($users as $user) {
+			$name = $user['name'] ?? '';
+			if (!empty($user['current'])) {
+				$origin = 'current';
+			} elseif (strpos($name, 'cloud/') === 0) {
+				$origin = 'cloud';
+			} elseif (strpos($name, 'local/jeedom') === 0) {
+				$origin = 'jeedom';
+			} else {
+				$origin = 'local';
+			}
+			$return[] = ['name'=>$name, 'origin'=>$origin];
+		}
+		return $return;
+	}
+
+	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
+	public function createBatteriesActions() {
+		if (is_object($this->getCmd(null, 'action_batteries_charge_to_full_off'))) return;
+		$actions = [
+			['action_batteries_mode', __("Batteries mode", __FILE__), 'select', 'batteries_mode', ['listValue'=>'zero|'.__("Zéro (autoconsommation)", __FILE__).';to_full|'.__("Charge complète", __FILE__).';standby|'.__("Veille", __FILE__).';predictive|'.__("Prédictif", __FILE__)]],
+			['action_batteries_charge_on', __("Batteries autoriser la charge", __FILE__), 'other', 'batteries_charge_allowed', null],
+			['action_batteries_charge_off', __("Batteries interdire la charge", __FILE__), 'other', 'batteries_charge_allowed', null],
+			['action_batteries_discharge_on', __("Batteries autoriser la décharge", __FILE__), 'other', 'batteries_discharge_allowed', null],
+			['action_batteries_discharge_off', __("Batteries interdire la décharge", __FILE__), 'other', 'batteries_discharge_allowed', null],
+			['action_batteries_charge_to_full_on', __("Batteries lancer la charge complète", __FILE__), 'other', 'batteries_charge_to_full', null],
+			['action_batteries_charge_to_full_off', __("Batteries arrêter la charge complète", __FILE__), 'other', 'batteries_charge_to_full', null],
+		];
+		foreach($actions as $action) {
+			if (is_object($this->getCmd(null, $action[0]))) continue;
+			$cmd = ['logicalId'=>$action[0], 'name'=>$action[1], 'type'=>'action', 'subtype'=>$action[2], 'value'=>$action[3], 'isVisible'=>1];
+			if ($action[4]) $cmd['configuration'] = $action[4];
+			$this->createCmd($cmd);
+		}
+	}
+
 	/* Nom de l'utilisateur créé sur les équipements. Unique par Jeedom : deux Jeedom avec le même nom s'invalideraient leur token */
 	public static function v2UserName() {
 		self::v2CheckClone();
 		$name = config::byKey('v2UserName', 'HomeWizard', '');
 		if ($name == '') {
-			$name = 'jeedom-'.bin2hex(random_bytes(4));
+			$name = self::v2NewUserName();
 			config::save('v2UserName', $name, 'HomeWizard');
 		}
 		return $name;
@@ -959,7 +1052,7 @@ class HomeWizard extends eqLogic {
 		}
 	}
 	
-	/* Simple test réseau pour les logs : la commande Online ne dépend plus du ping mais des messages reçus (voir cron5) */
+	/* Test réseau, utilisé par cron5 pour trancher quand un équipement est silencieux */
 	public function pingHost($host, $timeout = null) {
 		$timeoutValue="";
 		if($timeout) {
@@ -1193,6 +1286,28 @@ class HomeWizardCmd extends cmd {
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
 				if($result['result']==='ko') {
 					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_batteries_mode':
+			case 'action_batteries_charge_on':
+			case 'action_batteries_charge_off':
+			case 'action_batteries_discharge_on':
+			case 'action_batteries_discharge_off':
+			case 'action_batteries_charge_to_full_on':
+			case 'action_batteries_charge_to_full_off':
+				// groupe de Plug-In Batteries piloté par ce compteur
+				$on = (substr($logical, -3) == '_on')?1:0;
+				if ($logical == 'action_batteries_mode') {
+					$request = ['cmd'=>'batteries_mode', 'id'=>$eqLogical, 'val'=>$_options['select'] ?? ''];
+				} elseif (strpos($logical, 'action_batteries_charge_to_full') === 0) {
+					$request = ['cmd'=>'batteries_charge_to_full', 'id'=>$eqLogical, 'val'=>$on];
+				} else {
+					$request = ['cmd'=>'batteries_permission', 'id'=>$eqLogical, 'val'=>(strpos($logical, '_discharge_') !== false)?'discharge_allowed':'charge_allowed', 'state'=>$on];
+				}
+				$result = HomeWizard::hwExecute('cmd',$request);
+				if(!is_array($result) || $result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result) && isset($result['error']))?json_encode($result['error']):''));
 					return false;
 				}
 			break;

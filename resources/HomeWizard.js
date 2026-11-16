@@ -24,6 +24,10 @@ const pollingIntervalsDefaults={
 const v2Supported=["HWE-P1","SDM230-wifi","HWE-KWH1","SDM630-wifi","HWE-KWH3","HWE-BAT"];
 // Equipements qui n'existent qu'en API v2
 const v2Only=["HWE-BAT"];
+// Equipements qui pilotent un groupe de Plug-In Batteries (/api/batteries, API v2 uniquement)
+const batteriesTypes=["HWE-P1","SDM230-wifi","HWE-KWH1","SDM630-wifi","HWE-KWH3"];
+const batteriesMinInterval=5000;
+const batteriesIdleInterval=300000; // sans batterie associée (ou endpoint absent), on revérifie toutes les 5 minutes
 const systemPollingInterval=60000;
 const webSocketFallbackDelay=15000; // sans mesure reçue par WebSocket après ce délai, on repasse en polling
 const webSocketLostDelay=30000; // une coupure du WebSocket plus courte est silencieuse (la librairie se reconnecte seule)
@@ -75,6 +79,8 @@ const systemIntervals = {};
 const wsTimers = {}; // API v2 : timers du WebSocket par équipement {fallback, throttle}
 const known = {}; // derniers mdns reçus par équipement : {v1: mdns, v2: mdns}
 const pairings = {}; // appairages (migration API v2) en cours
+const batteriesTimers = {}; // API v2 : timer de lecture du groupe de batteries par équipement
+const batteriesState = {}; // dernier état du groupe de batteries par équipement
 const lastSeen = {}; // dernier message reçu par équipement
 const onlineState = {}; // dernier état en ligne envoyé à Jeedom par équipement
 conf.devices = {}; // {id: {apiVersion: 'v2', token: 'xxx'}} reçu de Jeedom
@@ -176,6 +182,27 @@ myCommands.cmd = async function(req, res) {
 				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
 				res.json({'result':'ok'});
 			}
+		} else if(req.query.cmd == 'batteries_mode' || req.query.cmd == 'batteries_permission' || req.query.cmd == 'batteries_charge_to_full') {
+			// pilotage du groupe de Plug-In Batteries associé à ce compteur (API v2)
+			if(typeof conn[req.query.id].updateBatteries != 'function') {
+				throw new Error("Cet équipement ne pilote pas de batteries (API v2 nécessaire)");
+			}
+			let params;
+			if(req.query.cmd == 'batteries_mode') {
+				params={mode: req.query.val};
+			} else if(req.query.cmd == 'batteries_charge_to_full') {
+				params={charge_to_full: (req.query.val == 1)};
+			} else {
+				// les permissions s'envoient en liste complète : on part du dernier état connu
+				const current=(batteriesState[req.query.id] && batteriesState[req.query.id].permissions) || [];
+				const permissions=current.filter((permission) => permission != req.query.val);
+				if(req.query.state == 1) {permissions.push(req.query.val);}
+				params={permissions: permissions};
+			}
+			result=await conn[req.query.id].updateBatteries(params);
+			Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+			eventReceived(req.query.id,batteriesEvent(req.query.id,result));
+			res.json({'result':'ok'});
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
@@ -339,6 +366,45 @@ myCommands.unpair = async function(req, res) {
 };
 
 
+/** Gestion des utilisateurs (autorisations) enregistrés sur un équipement en API v2 **/
+myCommands.users = async function(req, res) {
+	res.type('json');
+	const id = req.query.id;
+	if (!conn[id] || !conn[id].isV2) {
+		res.json({'result':'ko','error':"Equipement "+id+" non connecté en API v2"});
+		return;
+	}
+	try {
+		res.json({'result':'ok','users':await conn[id].getUsers()});
+	} catch (e) {
+		res.json({'result':'ko','error':String(e.errorCode || e.message || e)});
+	}
+};
+
+myCommands.userDelete = async function(req, res) {
+	res.type('json');
+	const id = req.query.id;
+	const name = req.query.name;
+	Logger.log("Reçu une demande de suppression de l'utilisateur "+name+" sur "+id,LogType.INFO);
+	if (!conn[id] || !conn[id].isV2 || !name) {
+		res.json({'result':'ko','error':"Equipement "+id+" non connecté en API v2"});
+		return;
+	}
+	try {
+		const users = await conn[id].getUsers();
+		// l'utilisateur de ce Jeedom se retire par le retour à l'API v1 ou la suppression de l'équipement
+		if (users.some((user) => user.name == name && user.current)) {
+			res.json({'result':'ko','error':"C'est l'utilisateur de ce Jeedom"});
+			return;
+		}
+		await conn[id].deleteUser(name);
+		res.json({'result':'ok','users':await conn[id].getUsers()});
+	} catch (e) {
+		Logger.log(id+" : Suppression de l'utilisateur "+name+" KO : "+(e.errorCode || e.message || e),LogType.WARNING);
+		res.json({'result':'ko','error':String(e.errorCode || e.message || e)});
+	}
+};
+
 // prepare commands
 app.get('/stop', myCommands.stop);
 app.get('/cmd',	 myCommands.cmd);
@@ -346,6 +412,8 @@ app.get('/config', myCommands.config);
 app.get('/pair', myCommands.pair);
 app.get('/pairCancel', myCommands.pairCancel);
 app.get('/unpair', myCommands.unpair);
+app.get('/users', myCommands.users);
+app.get('/userDelete', myCommands.userDelete);
 app.use(function(err, req, res, _next) {
 	res.type('json');
 	Logger.log(err,LogType.ERROR);
@@ -449,6 +517,11 @@ function removeConnection(index) {
 		clearInterval(systemIntervals[index]);
 		delete systemIntervals[index];
 	}
+	if(batteriesTimers[index]) {
+		clearTimeout(batteriesTimers[index]);
+		delete batteriesTimers[index];
+	}
+	delete batteriesState[index];
 	if(wsTimers[index]) {
 		clearTimeout(wsTimers[index].fallback);
 		clearTimeout(wsTimers[index].throttle);
@@ -489,6 +562,51 @@ function startSystemInterval(index) {
 		getSystem();
 		systemIntervals[index] = setInterval(getSystem, systemPollingInterval);
 	}
+}
+
+// API v2 : état du groupe de Plug-In Batteries associé à un compteur, en valeurs simples pour Jeedom
+function batteriesEvent(index, batteries) {
+	batteriesState[index] = batteries;
+	const ev = {
+		batteries_count: batteries.battery_count,
+		batteries_mode: batteries.mode,
+		batteries_power_w: batteries.power_w,
+		batteries_target_power_w: batteries.target_power_w,
+		batteries_max_consumption_w: batteries.max_consumption_w,
+		batteries_max_production_w: batteries.max_production_w,
+	};
+	if(Array.isArray(batteries.permissions)) {
+		ev.batteries_charge_allowed = (batteries.permissions.includes('charge_allowed'))?1:0;
+		ev.batteries_discharge_allowed = (batteries.permissions.includes('discharge_allowed'))?1:0;
+	}
+	if(typeof batteries.charge_to_full == 'boolean') {ev.batteries_charge_to_full = (batteries.charge_to_full)?1:0;}
+	return ev;
+}
+
+// API v2 : le compteur P1 et les kWh Meters pilotent les Plug-In Batteries qui leur sont associées
+function startBatteriesInterval(index) {
+	const api = conn[index];
+	if(batteriesTimers[index] || typeof api.getBatteries != 'function') {return;}
+	const activeInterval = Math.max(conf.pollingIntervals[index.split('_')[0]] || 0, batteriesMinInterval);
+	const poll = async () => {
+		let delay = batteriesIdleInterval;
+		try {
+			const batteries = await api.getBatteries();
+			if(conn[index] !== api) {return;}
+			if(batteries.battery_count === 0) {
+				// plus aucune batterie associée : on le signale une fois si on en avait
+				if(batteriesState[index] && batteriesState[index].battery_count !== 0) {eventReceived(index,batteriesEvent(index,batteries));}
+				batteriesState[index] = batteries;
+			} else {
+				eventReceived(index,batteriesEvent(index,batteries));
+				delay = activeInterval;
+			}
+		} catch(error) {
+			Logger.log(index+' (getBatteries) : '+(error.errorCode || error),LogType.DEBUG);
+		}
+		if(conn[index] === api) {batteriesTimers[index] = setTimeout(poll, delay);}
+	};
+	batteriesTimers[index] = setTimeout(poll, 1000);
 }
 
 // API v2 : adapte une mesure avant envoi à Jeedom
@@ -570,6 +688,7 @@ async function doConnect(index, type, mdns, quiet) {
 
 	if(conn[index].isV2) {
 		startSystemInterval(index);
+		if(batteriesTypes.includes(type)) {startBatteriesInterval(index);}
 		// API v2 : l'équipement pousse ses mesures par WebSocket, plus besoin de l'interroger
 		startWebSocket(index);
 	} else {
