@@ -334,6 +334,11 @@ class HomeWizard extends eqLogic {
 		    $depDetails = json_decode($depPackageJson, true);
 		    $installedVersion = $depDetails['version'];
 		
+		    // dépendance installée depuis GitHub : pas de version dans la spec, la version minimale est dans githubMinVersions
+		    if (strpos($requiredVersionSpec, 'github:') === 0) {
+		        $requiredVersionSpec = $packageRequiredVers['githubMinVersions'][$dep] ?? '>=0';
+		    }
+		
 		    preg_match('/(>=|<=|>|<|=)?(\d+(\.\d+){0,2})/', $requiredVersionSpec, $matches);
 		    $requiredOperator = $matches[1] ?: '==';
 		    $requiredVersion = $matches[2];
@@ -519,23 +524,45 @@ class HomeWizard extends eqLogic {
 
 	/*
 	 * Illustration de l'assistant de migration : l'image officielle de l'équipement avec la position de son bouton
-	 * (x et y en % de l'image), sur laquelle un doigt animé est superposé. Sans image : un dessin schématique animé.
+	 * (x et y en % de l'image), sur laquelle un doigt animé est superposé.
+	 * Sans position connue (nouveau type) : l'image seule, sans animation.
 	 */
 	public static function v2PairingIllustration($type) {
 		$buttons = [
 			'HWE-P1'=>[50, 69], // le bouton est la face ronde, au centre de l'anneau lumineux
+			'HWE-KWH1'=>[39.3, 61.3], // touche wifi
+			'HWE-KWH3'=>[75.7, 36.7], // touche wifi
 			'SDM230-wifi'=>[40.7, 61.7], // touche wifi
 			'SDM630-wifi'=>[75.7, 36.7], // touche wifi
+			'HWE-BAT'=>[41.7, 42.3], // bouton rond au dessus des leds
 			// pas encore d'API v2, prêt pour plus tard
 			'HWE-WTR'=>[67, 32.5],
 			'HWE-SKT'=>[80, 42],
 		];
-		$family = self::v2Family($type);
 		$image = 'plugins/HomeWizard/core/config/img/'.$type.'.png';
-		if (isset($buttons[$type]) && file_exists(dirname(__FILE__).'/../../../../'.$image)) {
-			return ['image'=>$image, 'x'=>$buttons[$type][0], 'y'=>$buttons[$type][1], 'hold'=>($family == 'kwh')];
+		$hold = (self::v2Family($type) == 'kwh');
+		if (!file_exists(dirname(__FILE__).'/../../../../'.$image)) {
+			return ['image'=>'plugins/HomeWizard/plugin_info/HomeWizard_icon.png', 'x'=>null, 'y'=>null, 'hold'=>$hold];
 		}
-		return ['image'=>'plugins/HomeWizard/core/config/img/pairing_'.(($family == '')?'bat':$family).'.svg', 'x'=>null, 'y'=>null, 'hold'=>($family == 'kwh')];
+		if (!isset($buttons[$type])) {
+			return ['image'=>$image, 'x'=>null, 'y'=>null, 'hold'=>$hold];
+		}
+		return ['image'=>$image, 'x'=>$buttons[$type][0], 'y'=>$buttons[$type][1], 'hold'=>$hold];
+	}
+
+	/*
+	 * Commandes qui ne seront plus mises à jour après la migration : l'API v2 des kWh meters ne donne plus
+	 * les index par tarif (total_power_import_t1_kwh...), seulement les totaux.
+	 */
+	public function v2StaleCmds() {
+		$return = [];
+		if (self::v2Family($this->getConfiguration('type')) != 'kwh') return $return;
+		foreach($this->getCmd('info') as $cmd) {
+			if (preg_match('/^(total_power|energy)_(import|export)_t\d_kwh$/', $cmd->getLogicalId())) {
+				$return[] = $cmd->getName();
+			}
+		}
+		return $return;
 	}
 
 	/* Nom de l'utilisateur créé sur les équipements. Unique par Jeedom : deux Jeedom avec le même nom s'invalideraient leur token */
@@ -611,7 +638,8 @@ class HomeWizard extends eqLogic {
 				'state'=>$eqp->getMigrationState(),
 				'canRevert'=>($eqp->getConfiguration('apiVersion') == 'v2' && !in_array($type, self::v2OnlyTypes())),
 				'apiVersion'=>$eqp->getConfiguration('apiVersion', 'v1'),
-				'v2ApiVersion'=>$eqp->getConfiguration('v2ApiVersion')
+				'v2ApiVersion'=>$eqp->getConfiguration('v2ApiVersion'),
+				'staleCmds'=>$eqp->v2StaleCmds()
 			];
 		}
 		return $return;
@@ -647,7 +675,8 @@ class HomeWizard extends eqLogic {
 		return [
 			'timeout'=>$result['timeout'] ?? self::V2_PAIR_TIMEOUT,
 			'family'=>self::v2Family($this->getConfiguration('type')),
-			'illustration'=>self::v2PairingIllustration($this->getConfiguration('type'))
+			'illustration'=>self::v2PairingIllustration($this->getConfiguration('type')),
+			'staleCmds'=>$this->v2StaleCmds()
 		];
 	}
 

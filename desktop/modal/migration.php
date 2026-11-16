@@ -145,8 +145,13 @@ $hwMigrationStart = init('eqLogic_id');
 					</div>
 					<div>
 						<i class="fas fa-spinner fa-spin"></i> {{En attente de l'appui sur le bouton...}}<br />
-						<small id="hwMig_schematic">{{Le dessin est schématique, la position du bouton peut différer sur votre équipement.}}</small>
 					</div>
+				</div>
+				<div class="alert alert-warning hwMig_stale" style="display:none;">
+					<i class="fas fa-exclamation-triangle"></i> {{Exception pour les kWh Meters : l'API v2 ne fournit plus les index par tarif, seulement les totaux.}}
+					{{Ces commandes ne seront plus mises à jour après la migration (elles sont conservées avec leur historique) :}}
+					<strong class="cmds"></strong>.
+					{{Utilisez à la place les commandes des totaux (import et export en kWh).}}
 				</div>
 				<a class="btn btn-default" id="bt_hwMigCancel"><i class="fas fa-times"></i> {{Annuler}}</a>
 			</div>
@@ -159,6 +164,11 @@ $hwMigrationStart = init('eqLogic_id');
 			<div class="icon ok"><i class="fas fa-check-circle"></i></div>
 			<h3>{{Migration réussie}}</h3>
 			<p><span id="hwMig_doneName"></span> {{utilise maintenant l'API v2.}} <span id="hwMig_doneRenamed"></span></p>
+			<div class="alert alert-warning hwMig_stale" style="display:none;text-align:left;">
+				<i class="fas fa-exclamation-triangle"></i> {{Exception pour les kWh Meters : ces commandes ne sont plus mises à jour par l'API v2 (index par tarif) :}}
+				<strong class="cmds"></strong>.
+				{{Utilisez à la place les commandes des totaux (import et export en kWh).}}
+			</div>
 			<a class="btn btn-success" id="bt_hwMigNext" style="display:none;"><i class="fas fa-arrow-right"></i> {{Équipement suivant}} (<span class="nb"></span>)</a>
 			<a class="btn btn-default" id="bt_hwMigBackDone"><i class="fas fa-list"></i> {{Retour à la liste}}</a>
 			<a class="btn btn-primary" id="bt_hwMigFinish"><i class="fas fa-check"></i> {{Terminer}}</a>
@@ -231,7 +241,11 @@ $hwMigrationStart = init('eqLogic_id');
 			html += '<td>' + eq.name + '</td>'; // getHumanName : déjà du html Jeedom
 			html += '<td><span class="label label-default">' + esc(eq.type) + '</span></td>';
 			html += '<td><span class="label label-' + ((eq.apiVersion == 'v2') ? 'success' : 'default') + '">' + esc(eq.apiVersion || 'v1') + '</span></td>';
-			html += '<td><span class="label label-' + state.label + '" style="white-space:normal;">' + state.text + '</span></td>';
+			html += '<td><span class="label label-' + state.label + '" style="white-space:normal;">' + state.text + '</span>';
+			if ((eq.state == 'ready' || eq.state == 'invalid') && eq.staleCmds && eq.staleCmds.length > 0) {
+				html += '<br /><small><i class="fas fa-exclamation-triangle"></i> {{Ne seront plus mises à jour en API v2 :}} ' + esc(eq.staleCmds.join(', ')) + '</small>';
+			}
+			html += '</td>';
 			html += '<td style="white-space:nowrap;">';
 			if (eq.state == 'ready' || eq.state == 'invalid') {
 				html += '<a class="btn btn-success btn-sm bt_hwMigStart"><i class="fas fa-exchange-alt"></i> ' + ((eq.state == 'invalid') ? "{{Refaire la migration}}" : "{{Migrer}}") + '</a> ';
@@ -320,13 +334,14 @@ $hwMigrationStart = init('eqLogic_id');
 				current = eq;
 				var illu = data.result.illustration;
 				$('#img_hwMigIllu').attr('src', illu.image);
-				// image officielle : on place le doigt animé sur le bouton, sinon le dessin schématique est déjà animé
+				// image officielle : on place le doigt animé sur le bouton (type sans position connue : image seule)
 				var hasButton = (illu.x !== null && illu.y !== null);
 				$('#div_hwMigration .hwMig_overlay').removeClass('press hold').toggleClass((illu.hold) ? 'hold' : 'press', hasButton);
 				$('#div_hwMigration .hwMig_overlay .anchor').attr('transform', 'translate(' + (illu.x * 4) + ' ' + (illu.y * 4) + ')');
 				// bouton à droite de l'image : l'étiquette "1–3 s" passe à gauche pour rester visible
 				$('#div_hwMigration .hwMig_overlay .holdLabel').attr('transform', (illu.x > 55) ? 'translate(-172 0)' : '');
-				$('#hwMig_schematic').toggle(!hasButton);
+				var stale = data.result.staleCmds || [];
+				$('#div_hwMigration .hwMig_stale').toggle(stale.length > 0).find('.cmds').text(stale.join(', '));
 				$('#hwMig_pressName').html(eq.name);
 				$('#div_hwMigration [data-family]').hide().filter('[data-family=' + data.result.family + ']').show();
 				showView('press');
