@@ -22,7 +22,10 @@ class HomeWizard extends eqLogic {
 	/***************************Attributs*******************************/	
 	public static $_encryptConfigKey = ['token'];
 	
-	const V2_PAIR_TIMEOUT = 120; // secondes laissées à l'utilisateur pour appuyer sur le bouton
+	// Secondes laissées à l'utilisateur pour aller appuyer sur le bouton. C'est un choix du plugin : l'API ne fixe aucune
+	// limite avant l'appui (on peut l'interroger aussi longtemps qu'on veut), elle n'impose que 30 secondes APRES l'appui
+	// pour demander le token, délai toujours respecté puisque le démon interroge toutes les 2 secondes.
+	const V2_PAIR_TIMEOUT = 120;
 
 	public static function backupExclude() {
 		return ['resources/node_modules'];
@@ -542,6 +545,7 @@ class HomeWizard extends eqLogic {
 			// pas encore d'API v2, prêt pour plus tard
 			'HWE-WTR'=>[67, 32.5],
 			'HWE-SKT'=>[80, 42],
+			'HWE-TMP'=>[56.5, 64], // bouton sur le côté
 		];
 		$image = 'plugins/HomeWizard/core/config/img/'.$type.'.png';
 		$hold = (self::v2Family($type) == 'kwh');
