@@ -23,7 +23,7 @@
   "dependencies": {
 	"homewizard-energy-api": "github:NebzHB/homewizard-energy-api#dist",
 	"express": ">=5.3.0",
-	"axios": ">=1.21.0"
+	"axios": ">=1.21.1"
   },
   "githubMinVersions": {
 	"homewizard-energy-api": ">=1.6.0"
