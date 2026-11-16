@@ -178,6 +178,13 @@ class HomeWizard extends eqLogic {
 				$eqp = eqlogic::byLogicalId($logical,'HomeWizard');
 				if (is_object($eqp)){
 					cache::set('HomeWizard::lastSeen::'.$eqp->getId(), time());
+					// Un message reçu = en ligne. Le démon n'envoie Online qu'aux changements d'état : si cron5 a passé
+					// l'équipement hors ligne entre-temps (ping sans réponse), c'est ici qu'il revient en ligne.
+					// Pas pendant l'arrêt du démon, ses derniers messages ne doivent pas remettre en ligne.
+					if (cache::byKey('HomeWizard::daemonStopping')->getValue(0) == 0) {
+						$onlineCmd = $eqp->getCmd(null, 'online');
+						if (is_object($onlineCmd) && $onlineCmd->execCmd() != 1) $eqp->checkAndUpdateCmd('online', 1);
+					}
 					$val=$data['value'];
 					log::add('HomeWizard','debug',json_encode($val));
 					$hasNewCmd=false;
@@ -471,6 +478,7 @@ class HomeWizard extends eqLogic {
 		}
 		log::add('HomeWizard', 'info', __("Lancement du démon", __FILE__).' '.'HomeWizard');
 		cache::set('HomeWizard::daemonStart', time());
+		cache::set('HomeWizard::daemonStopping', 0);
 		$socketport = self::getFreePort();
 		$url  = network::getNetworkAccess('internal').'/core/api/jeeApi.php' ;
 
@@ -510,6 +518,7 @@ class HomeWizard extends eqLogic {
 		$deamon_info = self::deamon_info();
 		if ($deamon_info['state'] == 'ok') {
 			log::add('HomeWizard', 'info', __("Arrêt du démon", __FILE__).' '.'HomeWizard');
+			cache::set('HomeWizard::daemonStopping', 1);
 			self::setAllOffline();
 			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
 			$request_http = new com_http($url);
