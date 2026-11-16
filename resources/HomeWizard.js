@@ -26,6 +26,8 @@ const v2Supported=["HWE-P1","SDM230-wifi","HWE-KWH1","SDM630-wifi","HWE-KWH3","H
 const v2Only=["HWE-BAT"];
 const systemPollingInterval=60000;
 const webSocketFallbackDelay=15000; // sans mesure reçue par WebSocket après ce délai, on repasse en polling
+const webSocketLostDelay=30000; // une coupure du WebSocket plus courte est silencieuse (la librairie se reconnecte seule)
+const v1FallbackDelay=10000; // équipement annoncé seulement en API v2 et pas autorisé : on tente quand même l'API v1
 const pairDefaultTimeout=120; // secondes
 const pairInterval=2000;
 
@@ -304,7 +306,8 @@ myCommands.unpair = async function(req, res) {
 	Logger.log("Reçu une demande de retour à l'API v1 pour "+id,LogType.INFO);
 	let deleted = false;
 	try {
-		if (conn[id] && conn[id].isV2) {
+		// keepUser : le token est partagé avec un autre Jeedom (copie), on ne le supprime pas de l'équipement
+		if (conn[id] && conn[id].isV2 && req.query.keepUser != 1) {
 			await conn[id].deleteUser();
 			deleted = true;
 		}
@@ -359,6 +362,11 @@ const server = app.listen(conf.serverPort, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
 	Logger.log("Attente de la réception de la configuration...",LogType.INFO);
 	jsend({'eventType': 'daemonReady', 'result':true});
+});
+server.on('error', (error) => {
+	// port déjà utilisé... : inutile de rester en vie sans pouvoir écouter Jeedom
+	Logger.log("Impossible d'écouter sur le port "+conf.serverPort+" : "+error,LogType.ERROR);
+	process.exit(1);
 });
 
 // API v2 : un utilisateur (token) Jeedom existe pour cet équipement
@@ -428,6 +436,7 @@ function removeConnection(index) {
 	if(wsTimers[index]) {
 		clearTimeout(wsTimers[index].fallback);
 		clearTimeout(wsTimers[index].throttle);
+		clearTimeout(wsTimers[index].lost);
 		delete wsTimers[index];
 	}
 	if(conn[index]) {
@@ -456,6 +465,8 @@ function startSystemInterval(index) {
 			eventReceived(index,ev);
 		} catch(error) {
 			Logger.log(index+' (getSystem) : '+error,LogType.DEBUG);
+			// utilisateur supprimé pendant que le démon tourne
+			if(error.errorCode == 'user:unauthorized' && conn[index]) {tokenInvalid(index);}
 		}
 	};
 	if(!systemIntervals[index]) {
@@ -480,7 +491,21 @@ function v2Measurement(response) {
 	return ev;
 }
 
-async function connect(index, type, mdns) {
+// Ne doit jamais rejeter : appelée sans await depuis les événements (découverte, appairage...)
+function connect(index, type, mdns, quiet) {
+	return doConnect(index, type, mdns, quiet).catch((error) => {
+		Logger.log(index+' (connect) : '+(error && error.stack || error),LogType.ERROR);
+	});
+}
+
+function tokenInvalid(index) {
+	Logger.log(index+" : Le token de l'API v2 n'est plus valide (utilisateur supprimé ou équipement réinitialisé), refaites l'autorisation de cet équipement avec l'assistant",LogType.ERROR);
+	jsend({eventType: 'tokenInvalid', id: index});
+	removeConnection(index);
+}
+
+// quiet : tentative en API v1 sans annonce v1 reçue, un échec est normal (API locale v1 désactivée) et n'est pas retenté
+async function doConnect(index, type, mdns, quiet) {
 	const v2 = useV2(index);
 	// if already exists but with different ip, delete previous object.
 	if(conn[index] && conn[index].polling.getData && conn[index].mdns.ip != mdns.ip) {
@@ -504,8 +529,11 @@ async function connect(index, type, mdns) {
 		basic = await conn[index].getBasicInformation();
 	} catch(error) {
 		if(conn[index] && conn[index].isV2 && error.errorCode == 'user:unauthorized') {
-			Logger.log(index+" : Le token de l'API v2 n'est plus valide (utilisateur supprimé ou équipement réinitialisé), refaites la migration de cet équipement",LogType.ERROR);
-			jsend({eventType: 'tokenInvalid', id: index});
+			tokenInvalid(index);
+			return;
+		}
+		if(quiet) {
+			Logger.log(index+" : Pas de réponse en API v1 ("+error+"), l'équipement attend son autorisation en API v2",LogType.DEBUG);
 			removeConnection(index);
 			return;
 		}
@@ -568,9 +596,12 @@ function startPolling(index) {
 // API v2 : les mesures arrivent par WebSocket dès qu'elles changent (chaque seconde pour un P1 Meter).
 // Jeedom reçoit au plus une mesure par intervalle de polling configuré, toujours la plus récente.
 function startWebSocket(index) {
+	// déjà démarré pour cette connexion (connect() est rappelé à chaque annonce mDNS de l'équipement, v1 et v2)
+	if(wsTimers[index]) {return;}
 	const api = conn[index];
 	const interval = conf.pollingIntervals[index.split('_')[0]];
-	const timers = {fallback: null, throttle: null};
+	const timers = {fallback: null, throttle: null, lost: null};
+	let lost = false; // coupure longue signalée
 	let lastSent = 0;
 	let pending = null;
 	let received = false;
@@ -588,6 +619,15 @@ function startWebSocket(index) {
 			received = true;
 			Logger.log(index+' (WebSocket) : Connecté, les mesures sont poussées par l\'équipement',LogType.INFO);
 		}
+		if(timers.lost) {
+			clearTimeout(timers.lost);
+			timers.lost = null;
+		}
+		if(lost) {
+			lost = false;
+			Logger.log(index+' (WebSocket) : Reconnecté',LogType.INFO);
+			jsend({eventType: 'doPing', id: index}); // remet la commande Online à jour
+		}
 		pending = measurement;
 		if(timers.throttle) {return;}
 		const wait = interval - (Date.now() - lastSent);
@@ -599,17 +639,23 @@ function startWebSocket(index) {
 	});
 	api.websocket.on('error', (error) => {
 		Logger.log(index+' (WebSocket) : '+(error.errorCode || error.message || error),LogType.DEBUG);
-		if(error.errorCode == 'user:unauthorized') {
-			Logger.log(index+" : Le token de l'API v2 n'est plus valide (utilisateur supprimé ou équipement réinitialisé), refaites la migration de cet équipement",LogType.ERROR);
-			jsend({eventType: 'tokenInvalid', id: index});
-			removeConnection(index);
-		}
+		if(error.errorCode == 'user:unauthorized' && conn[index] === api) {tokenInvalid(index);}
 	});
 	api.websocket.on('close', () => {
 		if(conn[index] !== api) {return;}
-		// la librairie se reconnecte toute seule et se réabonne
-		Logger.log(index+' (WebSocket) : Connexion perdue, reconnexion automatique...',(received)?LogType.WARNING:LogType.DEBUG);
-		if(received) {jsend({eventType: 'doPing', id: index});}
+		// La librairie se reconnecte toute seule (toutes les 5s) et se réabonne : une coupure courte est normale et reste
+		// silencieuse. Si aucune mesure n'est revenue après webSocketLostDelay, on le signale une seule fois.
+		Logger.log(index+' (WebSocket) : Connexion fermée, reconnexion automatique...',LogType.DEBUG);
+		if(!received || lost || timers.lost) {return;}
+		timers.lost = setTimeout(() => {
+			timers.lost = null;
+			if(conn[index] !== api) {return;}
+			lost = true;
+			Logger.log(index+' (WebSocket) : Ne réponds plus sur le réseau, nouvelles tentatives en continu...',LogType.WARNING);
+			jsend({eventType: 'doPing', id: index});
+			// si l'équipement a changé d'IP, sa prochaine annonce mDNS doit être prise en compte
+			if(api.mdns) {discovery.removeCachedResponseByFqdn(api.mdns.fqdn);}
+		}, webSocketLostDelay);
 	});
 	api.websocket.subscribe('measurement');
 	api.websocket.start();
@@ -624,6 +670,9 @@ function startWebSocket(index) {
 }
 
 function discover() {	
+	// toujours repartir d'un mDNS neuf : deux équipements en erreur en même temps relancent chacun la découverte,
+	// sans cet arrêt les sockets et les écouteurs s'accumulaient
+	discovery.stop();
 	discovery.start();
 	
 	discovery.on('response', (mdns) => {
@@ -648,8 +697,20 @@ function discover() {
 			// l'équipement annonce l'API v2 (_homewizard._tcp) : Jeedom peut proposer la migration ou l'autorisation
 			// (envoyé après createEq : l'équipement doit exister dans Jeedom pour le retenir)
 			jsend({eventType: 'v2Available', id: index, mdns: mdns, supported: v2Supported.includes(type)});
-			// en API v1 c'est la réponse _hwenergy._tcp qui gère la connexion
-			if(!useV2(index)) {return;}
+			if(!useV2(index)) {
+				// En API v1 c'est l'annonce _hwenergy._tcp qui gère la connexion. Filet de sécurité : si elle n'arrive pas
+				// (seule l'annonce v2 a été reçue), on tente quand même l'API v1 pour ne pas laisser sans valeurs un équipement
+				// qui fonctionnait en v1.
+				if(!v2Only.includes(type) && !known[index].v1) {
+					setTimeout(() => {
+						if(!conn[index] && !useV2(index) && known[index] && !known[index].v1) {
+							Logger.log(index+" : Pas d'annonce API v1 reçue, tentative en API v1...",LogType.DEBUG);
+							connect(index, type, mdns, true);
+						}
+					}, v1FallbackDelay);
+				}
+				return;
+			}
 		} else if(mdns.txt.api_enabled == 0 && !useV2(index)) {
 			if(libHasV2 && v2Supported.includes(type)) {
 				Logger.log(index+" : API Locale (v1) pas activée dans l'application. Autorisez l'équipement en API v2 avec l'assistant du plugin, ou activez l'API Locale : Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);
@@ -707,6 +768,13 @@ function eventReceived(who,ev) {
 /** 
 	UTILS
 **/
+// Un démon ne doit pas s'arrêter sur une erreur imprévue d'une librairie ou d'un équipement : on la note et on continue
+process.on('uncaughtException', function(error) {
+	Logger.log("Erreur non gérée : "+(error && error.stack || error),LogType.ERROR);
+});
+process.on('unhandledRejection', function(reason) {
+	Logger.log("Promesse rejetée non gérée : "+(reason && reason.stack || reason),LogType.ERROR);
+});
 process.on('SIGHUP', function() {
 	Logger.log("Recu SIGHUP",LogType.DEBUG);
 	myCommands.stop();

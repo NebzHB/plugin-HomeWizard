@@ -46,7 +46,7 @@ function printEqLogic(_eqLogic) {
     var supported = (v2Types.indexOf(conf.type) >= 0);
     var v2Only = (conf.type == 'HWE-BAT'); // n'existe qu'en API v2 : pas de migration, seulement une autorisation par le bouton
     // nouvel équipement sans commande de l'API v1 : rien à migrer non plus, on l'autorise directement en API v2
-    var hasV1Cmds = (_eqLogic.cmd || []).some(function(cmd) { return /^(active_|total_power_|smr_version|montly_)/.test(cmd.logicalId || ''); });
+    var hasV1Cmds = (_eqLogic.cmd || []).some(function(cmd) { return cmd.logicalId != 'active_tariff_txt' && /^(active_|total_power_|smr_version|montly_)/.test(cmd.logicalId || ''); });
     var authOnly = (v2Only || !hasV1Cmds);
     var info = '';
     $('#span_apiVersion').text((isV2 || v2Only) ? 'v2' : 'v1').toggleClass('label-success', isV2).toggleClass('label-default', !isV2);

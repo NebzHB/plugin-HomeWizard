@@ -573,8 +573,60 @@ class HomeWizard extends eqLogic {
 		return $return;
 	}
 
+	/* Empreinte de la machine, vide si elle n'est pas disponible (certains conteneurs) */
+	public static function v2MachineId() {
+		$id = @file_get_contents('/etc/machine-id');
+		$id = ($id === false) ? '' : trim($id);
+		return ($id == '') ? '' : sha1($id);
+	}
+
+	/*
+	 * Ce Jeedom est-il la copie d'un autre (sauvegarde restaurée sur une autre machine, clone de disque...) ?
+	 * Les autorisations API v2 copiées restent valables sur les deux Jeedom, mais ils portaient le même nom d'utilisateur :
+	 * refaire une autorisation sur l'un aurait invalidé celle de l'autre. On donne donc un nouveau nom à cette copie, on
+	 * marque ses tokens comme partagés (ils ne seront pas supprimés de l'équipement par un retour à l'API v1) et on
+	 * prévient l'utilisateur dans le centre de messages.
+	 */
+	public static function v2CheckClone($fromRestore = false) {
+		$current = self::v2MachineId();
+		$stored = config::byKey('v2MachineId', 'HomeWizard', '');
+		$nbV2 = count(self::v2Devices());
+		if ($current == '') {
+			// impossible de savoir si la machine a changé : on prévient simplement après une restauration
+			if ($fromRestore && $nbV2 > 0) {
+				message::add('HomeWizard', __("Une sauvegarde vient d'être restaurée. Si elle provient d'un autre Jeedom qui reste en service, les deux partagent les mêmes autorisations API v2 sur vos équipements HomeWizard : elles fonctionnent sur les deux, mais refaire une autorisation (ou revenir à l'API v1) sur l'un coupera l'autre. Si c'est le même Jeedom, il n'y a rien à faire.", __FILE__), '', 'HomeWizard::restore');
+			}
+			return false;
+		}
+		if ($stored == $current) return false;
+		config::save('v2MachineId', $current, 'HomeWizard');
+		if ($stored == '') return false; // première exécution
+		log::add('HomeWizard', 'info', __("Ce Jeedom est une copie d'un autre (machine différente) : nouveau nom d'autorisation API v2", __FILE__));
+		config::save('v2UserName', 'jeedom-'.bin2hex(random_bytes(4)), 'HomeWizard');
+		foreach(eqLogic::byType('HomeWizard') as $eqp) {
+			if ($eqp->getConfiguration('apiVersion') == 'v2' && $eqp->getConfiguration('token') != '') {
+				$eqp->setConfiguration('tokenShared', 1);
+				$eqp->save(true);
+			}
+		}
+		if ($nbV2 > 0) {
+			message::add('HomeWizard', __("Ce Jeedom est une copie d'un autre Jeedom (sauvegarde restaurée sur une autre machine). Il partage avec lui les autorisations API v2 de vos équipements HomeWizard : tout continue de fonctionner sur les deux. Ce Jeedom a reçu un nouveau nom d'autorisation : refaire une autorisation ici ne coupera plus l'autre Jeedom. Si l'autre Jeedom n'existe plus, il n'y a rien à faire.", __FILE__), '', 'HomeWizard::clone');
+		}
+		return true;
+	}
+
+	/* Appelé par Jeedom après la restauration d'une sauvegarde */
+	public static function restore() {
+		try {
+			self::v2CheckClone(true);
+		} catch (Throwable $e) {
+			log::add('HomeWizard', 'warning', __("Vérification après restauration impossible", __FILE__).' : '.$e->getMessage());
+		}
+	}
+
 	/* Nom de l'utilisateur créé sur les équipements. Unique par Jeedom : deux Jeedom avec le même nom s'invalideraient leur token */
 	public static function v2UserName() {
+		self::v2CheckClone();
 		$name = config::byKey('v2UserName', 'HomeWizard', '');
 		if ($name == '') {
 			$name = 'jeedom-'.bin2hex(random_bytes(4));
@@ -677,6 +729,8 @@ class HomeWizard extends eqLogic {
 	/* L'équipement a des commandes de l'API v1, donc quelque chose à migrer */
 	public function hasV1Cmds() {
 		foreach($this->getCmd() as $cmd) {
+			// active_tariff_txt vient du fichier de config du type, elle existe aussi sur un équipement tout neuf
+			if ($cmd->getLogicalId() == 'active_tariff_txt') continue;
 			if (self::v2LogicalId($cmd->getLogicalId()) != $cmd->getLogicalId()) return true;
 		}
 		return false;
@@ -736,6 +790,7 @@ class HomeWizard extends eqLogic {
 		$this->setConfiguration('token', $token);
 		$this->setConfiguration('v2UserName', $userName);
 		$this->setConfiguration('tokenInvalid', 0);
+		$this->setConfiguration('tokenShared', 0);
 		$this->save(true);
 		$renamed = $this->renameCmdsForApi(true);
 		$this->save(); // postSave : commandes additionnelles avec leur nom API v2
@@ -747,13 +802,15 @@ class HomeWizard extends eqLogic {
 		if (in_array($this->getConfiguration('type'), self::v2OnlyTypes())) {
 			throw new Exception(__("Cet équipement n'existe qu'en API v2", __FILE__));
 		}
-		$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId()]);
+		// token copié d'un autre Jeedom (voir v2CheckClone) : on ne supprime pas l'utilisateur sur l'équipement, l'autre s'en sert
+		$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId(), 'keepUser'=>($this->getConfiguration('tokenShared') == 1)?1:0]);
 		if (!is_array($result) || !isset($result['result'])) {
 			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
 		}
 		$this->setConfiguration('apiVersion', 'v1');
 		$this->setConfiguration('token', '');
 		$this->setConfiguration('tokenInvalid', 0);
+		$this->setConfiguration('tokenShared', 0);
 		$this->save(true);
 		$renamed = $this->renameCmdsForApi(false);
 		$this->save();
