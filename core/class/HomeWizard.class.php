@@ -1239,6 +1239,18 @@ class HomeWizard extends eqLogic {
 		if (is_object($cmd)) $foot .= '<span><span class="hw-dot" data-hw_cmd="'.$cmd->getId().'" data-hw_kind="online" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></span> <span class="hw-lbl-online">'.__("En ligne", __FILE__).'</span><span class="hw-lbl-offline">'.__("Hors ligne", __FILE__).'</span></span>';
 		$cmd = $find('wifi_strength');
 		if (is_object($cmd)) $foot .= '<span><i class="fas fa-wifi"></i> '.$span($cmd).' %</span>';
+		// toutes les autres commandes info visibles : dans un popup ouvert par un bouton du pied
+		preg_match_all('/data-hw_cmd="(\d+)"/', $main.$switch.$tiles.$phases.$foot, $shown);
+		$others = '';
+		foreach($this->getCmd('info', null, true) as $cmd) {
+			if (in_array($cmd->getId(), $shown[1])) continue;
+			$others .= '<tr><td>'.$cmd->getName().'</td><td>'.$span($cmd, ($cmd->getSubType() == 'numeric')?'number':'text', 2).' '.$cmd->getUnite().'</td></tr>';
+		}
+		if ($others != '') {
+			$foot .= '<span class="hw-more cursor" title="'.__("Autres valeurs", __FILE__).'"><i class="fas fa-list-ul"></i> '.__("Autres valeurs", __FILE__).'</span>';
+			$others = '<div class="hw-popup"><table>'.$others.'</table></div>';
+		}
+		$replace['#hw_others#'] = $others;
 		$foot .= '<span class="hw-grow"></span><span>API '.(($this->getConfiguration('apiVersion') == 'v2')?'v2':'v1').'</span>';
 
 		$replace['#hw_image#'] = $this->getImage();
