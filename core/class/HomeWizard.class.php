@@ -1246,12 +1246,13 @@ class HomeWizard extends eqLogic {
 			if (in_array($cmd->getId(), $shown[1])) continue;
 			$others .= '<tr><td>'.$cmd->getName().'</td><td>'.$span($cmd, ($cmd->getSubType() == 'numeric')?'number':'text', 2).' '.$cmd->getUnite().'</td></tr>';
 		}
+		// à droite : l'API utilisée, puis le bouton des autres valeurs
+		$foot .= '<span class="hw-grow"></span><span>API '.(($this->getConfiguration('apiVersion') == 'v2')?'v2':'v1').'</span>';
 		if ($others != '') {
 			$foot .= '<span class="hw-more cursor" title="'.__("Autres valeurs", __FILE__).'"><i class="fas fa-list-ul"></i></span>';
 			$others = '<div class="hw-popup"><table>'.$others.'</table></div>';
 		}
 		$replace['#hw_others#'] = $others;
-		$foot .= '<span class="hw-grow"></span><span>API '.(($this->getConfiguration('apiVersion') == 'v2')?'v2':'v1').'</span>';
 
 		$replace['#hw_image#'] = $this->getImage();
 		$replace['#hw_main#'] = $main;
