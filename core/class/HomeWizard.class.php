@@ -744,18 +744,19 @@ class HomeWizard extends eqLogic {
 	}
 
 	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
-	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales */
+	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales, la charge de la batterie */
 	public static function genericTypeFor($_logicalId) {
 		$generic = [
 			'active_power_w'=>'POWER', 'power_w'=>'POWER',
 			'total_power_import_kwh'=>'CONSUMPTION', 'energy_import_kwh'=>'CONSUMPTION',
+			'state_of_charge_pct'=>'BATTERY', // charge de la Plug-In Battery : niveau de batterie dans HomeKit
 		];
 		return $generic[$_logicalId] ?? '';
 	}
 
 	/* Une seule fois par équipement : types génériques des commandes créées avant qu'ils existent (sans toucher à ceux déjà choisis) */
 	public function applyGenericTypes() {
-		if ($this->getConfiguration('genericTypes') == 1) return;
+		if ($this->getConfiguration('genericTypes') == 2) return;
 		foreach($this->getCmd('info') as $cmd) {
 			$generic = self::genericTypeFor($cmd->getLogicalId());
 			if ($generic != '' && $cmd->getGeneric_type() == '') {
@@ -763,7 +764,7 @@ class HomeWizard extends eqLogic {
 				$cmd->save(true);
 			}
 		}
-		$this->setConfiguration('genericTypes', 1);
+		$this->setConfiguration('genericTypes', 2);
 		$this->save(true);
 	}
 
@@ -1056,8 +1057,6 @@ class HomeWizard extends eqLogic {
 				foreach($eq['configuration'] as $c => $v) {
 					$eqp->setConfiguration($c, $v);
 				}
-				// nouveaux équipements : widget du plugin (les existants gardent leur affichage, case à cocher dans l'équipement)
-				$eqp->setConfiguration('pluginWidget', 1);
 				$eqp->setIsEnable($eq['enable']);
 				$eqp->setIsVisible($eq['visible']);
 				$eqp->save(true);
@@ -1154,9 +1153,8 @@ class HomeWizard extends eqLogic {
 		else return 'plugins/HomeWizard/plugin_info/HomeWizard_icon.png';
 	}
 	
-	/* Widget du plugin (case à cocher dans l'équipement) : la mesure principale, les totaux, les phases, l'état */
+	/* Widget du plugin : la mesure principale, les totaux, les phases, l'état, puis les commandes action visibles */
 	public function toHtml($_version = 'dashboard') {
-		if ($this->getConfiguration('pluginWidget', 0) != 1) return parent::toHtml($_version);
 		$replace = $this->preToHtml($_version);
 		if (!is_array($replace)) return $replace;
 		$version = jeedom::versionAlias($_version);
@@ -1248,6 +1246,15 @@ class HomeWizard extends eqLogic {
 		$replace['#hw_switch#'] = $switch;
 		$replace['#hw_tiles#'] = $tiles;
 		$replace['#hw_phases#'] = $phases;
+		// les autres commandes action visibles (réglages, identifier, batteries...) gardent leur widget Jeedom
+		$actions = '';
+		foreach($this->getCmd('action', null, true) as $cmd) {
+			if (in_array($cmd->getLogicalId(), ['action_power_on', 'action_power_off']) && $switch != '') continue;
+			$actions .= $cmd->toHtml($_version, '');
+		}
+		if ($actions != '') $actions = '<div class="hw-actions">'.$actions.'</div>';
+
+		$replace['#hw_actions#'] = $actions;
 		$replace['#hw_foot#'] = $foot;
 		return $this->postToHtml($_version, template_replace($replace, getTemplate('core', $version, 'eqLogic', 'HomeWizard')));
 	}
