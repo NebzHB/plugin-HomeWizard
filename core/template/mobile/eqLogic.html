@@ -31,6 +31,13 @@
 		.hw-widget .hw-switch { cursor: pointer; font-size: 26px; opacity: .45; flex: none; }
 		.hw-widget .hw-switch.hw-on { opacity: 1; color: var(--al-success-color, #4caf50); }
 		.hw-widget .hw-actions { margin-top: 8px; text-align: center; }
+		.hw-widget .hw-more { white-space: nowrap; }
+		.hw-widget .hw-popup { display: none; position: fixed; z-index: 1050; max-height: 60vh; max-width: 92vw; overflow: auto; padding: 6px 8px; border-radius: 6px; font-size: 12px; text-align: left; color: #333; background: #fff; border: 1px solid rgba(127,127,127,.4); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+		.hw-widget .hw-popup.hw-open { display: block; }
+		.hw-widget .hw-popup table { border-collapse: collapse; color: inherit; font-size: inherit; }
+		.hw-widget .hw-popup td { padding: 2px 6px; white-space: nowrap; background: transparent; border: 0; }
+		.hw-widget .hw-popup td:last-child { text-align: right; font-weight: 600; }
+		.hw-widget .hw-popup tr + tr td { border-top: 1px solid rgba(127,127,127,.2); }
 		.hw-widget .hw-waiting { margin-top: 8px; font-size: 12px; opacity: .8; }
 	</style>
 	<center class="widget-name">
@@ -48,6 +55,7 @@
 		#hw_phases#
 		#hw_actions#
 		<div class="hw-foot">#hw_foot#</div>
+		#hw_others#
 	</div>
 	<script>
 		(function() {
@@ -103,6 +111,36 @@
 					});
 				});
 			});
+			var more = root.querySelector('.hw-more');
+			var popup = root.querySelector('.hw-popup');
+			if (more && popup) {
+				more.addEventListener('click', function(event) {
+					event.stopPropagation();
+					if (popup.classList.toggle('hw-open')) { // sous le bouton, sans sortir de l'écran
+						var style = window.getComputedStyle(root); // mêmes couleurs que le widget, quel que soit le thème
+						if (style.backgroundColor && style.backgroundColor != 'transparent' && style.backgroundColor.indexOf('rgba(0, 0, 0, 0)') == -1) {
+							popup.style.backgroundColor = style.backgroundColor;
+							popup.style.color = style.color;
+						}
+						var rect = more.getBoundingClientRect();
+						popup.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - popup.offsetWidth - 4)) + 'px';
+						popup.style.top = Math.max(4, Math.min(rect.bottom + 4, window.innerHeight - popup.offsetHeight - 4)) + 'px';
+					}
+				});
+				popup.addEventListener('click', function(event) {
+					event.stopPropagation();
+				});
+				var close = function() {
+					if (!document.body.contains(root)) { // widget redessiné
+						document.removeEventListener('click', close);
+						window.removeEventListener('scroll', close, true);
+						return;
+					}
+					popup.classList.remove('hw-open');
+				};
+				document.addEventListener('click', close);
+				window.addEventListener('scroll', close, true);
+			}
 			var button = root.querySelector('.hw-switch');
 			if (button) {
 				button.addEventListener('click', function() {
