@@ -1,6 +1,6 @@
 /* jshint esversion: 8,node: true,-W041: false */
 "use strict";
-const HW = require('homewizard-energy-api');
+const HW = require('./utils/hwlib.js');
 const LogType = require('./utils/logger.js').logType;
 const Logger = require('./utils/logger.js').getInstance();
 const express = require('express');
@@ -84,10 +84,8 @@ const batteriesState = {}; // dernier état du groupe de batteries par équipeme
 const lastSeen = {}; // dernier message reçu par équipement
 const onlineState = {}; // dernier état en ligne envoyé à Jeedom par équipement
 conf.devices = {}; // {id: {apiVersion: 'v2', token: 'xxx'}} reçu de Jeedom
-// La librairie doit supporter l'API v2 (>= 1.6.0)
-const libHasV2 = (typeof HW.P1MeterApiV2 == 'function');
-// prepare callback for discovery
-const discovery = new HW.HomeWizardEnergyDiscovery((libHasV2)?{types: ['hwenergy', 'homewizard']}:undefined);
+// découverte des annonces API v1 (_hwenergy._tcp) et API v2 (_homewizard._tcp)
+const discovery = new HW.Discovery();
 
 // Ne jamais écrire un token dans les logs
 function logSafe(obj) {
@@ -189,7 +187,7 @@ myCommands.cmd = async function(req, res) {
 			await conn[req.query.id].reboot();
 			Logger.log("Redémarrage demandé : "+req.query.id,LogType.Info);
 			res.json({'result':'ok'});
-		} else if(req.query.cmd == 'cloud' || req.query.cmd == 'led') {
+		} else if(req.query.cmd == 'cloud' || req.query.cmd == 'led' || req.query.cmd == 'apiv1') {
 			// réglages système : communication avec le cloud HomeWizard, luminosité de la led d'état (API v2)
 			if(typeof conn[req.query.id].updateSystem != 'function') {
 				throw new Error("Cet équipement n'a pas ce réglage");
@@ -197,6 +195,10 @@ myCommands.cmd = async function(req, res) {
 			let params;
 			if(req.query.cmd == 'cloud') {
 				params={cloud_enabled: (req.query.val == 1)};
+			} else if(req.query.cmd == 'apiv1') {
+				// API v2 : couper l'API v1 réserve l'équipement aux clients autorisés (bouton)
+				if(!conn[req.query.id].isV2) {throw new Error("Ce réglage nécessite l'API v2");}
+				params={api_v1_enabled: (req.query.val == 1)};
 			} else {
 				if(!conn[req.query.id].isV2) {throw new Error("La luminosité de la led nécessite l'API v2");}
 				params={status_led_brightness_pct: Math.max(0, Math.min(100, parseInt(req.query.val) || 0))};
@@ -232,7 +234,8 @@ myCommands.cmd = async function(req, res) {
 			res.json({'result':'ko','error':error});
 		}
 	} catch (e) {
-		const errorDetail = e.response || e.message || e;
+		// code d'erreur de l'équipement (API v2 : errorCode, API v1 : apiError), sinon le message de l'erreur
+		const errorDetail = e.errorCode || e.apiError || e.message || e;
 		const logMsg = (typeof errorDetail === 'object') ? JSON.stringify(errorDetail) : errorDetail;
 		Logger.log("Réponse de la commande KO : "+logMsg,LogType.Info);
 		res.json({'result':'ko','error':logMsg});
@@ -275,7 +278,6 @@ myCommands.config = function(req, res) {
 			conf.devices = req.query.value.devices || {};
 			conf.userName = req.query.value.userName || 'jeedom';
 			Logger.log("Equipements en API v2 : "+(Object.keys(conf.devices).join(', ') || 'aucun'),LogType.DEBUG);
-			if(!libHasV2) {Logger.log("La librairie homewizard-energy-api installée ne supporte pas l'API v2, relancez les dépendances",LogType.WARNING);}
 			discover();
 		break;
 		case 'sendLoglevel':
@@ -301,10 +303,6 @@ myCommands.pair = function(req, res) {
 	res.type('json');
 	const id = req.query.id;
 	Logger.log("Reçu une demande d'appairage API v2 pour "+id,LogType.INFO);
-	if (!libHasV2) {
-		res.json({'result':'ko','error':"La librairie installée ne supporte pas l'API v2, relancez les dépendances"});
-		return;
-	}
 	if (!id || !known[id]) {
 		res.json({'result':'ko','error':"Equipement "+id+" pas (encore) découvert sur le réseau"});
 		return;
@@ -367,6 +365,18 @@ myCommands.unpair = async function(req, res) {
 		const api = (!temporary)?conn[id]:((useV2(id) && known[id])?newConnection(type, known[id].v2 || known[id].v1, 2, conf.devices[id].token):null);
 		try {
 			if (api) {
+				// retour en API v1 : l'API v1 a pu être coupée depuis Jeedom, on la rallume d'abord (sinon plus aucune valeur)
+				if (req.query.forget != 1 && typeof api.updateSystem == 'function') {
+					try {
+						const system = await api.getSystem();
+						if (system && system.api_v1_enabled === false) {
+							await api.updateSystem({api_v1_enabled: true});
+							Logger.log(id+" : API v1 réactivée sur l'équipement avant le retour en v1",LogType.INFO);
+						}
+					} catch (e) {
+						Logger.log(id+" : Impossible de vérifier ou réactiver l'API v1 : "+(e.errorCode || e.message || e),LogType.WARNING);
+					}
+				}
 				await api.deleteUser();
 				deleted = true;
 			}
@@ -478,57 +488,18 @@ server.on('error', (error) => {
 
 // API v2 : un utilisateur (token) Jeedom existe pour cet équipement
 function useV2(index) {
-	return Boolean(libHasV2 && conf.devices[index] && conf.devices[index].apiVersion == 'v2' && conf.devices[index].token);
+	return Boolean(conf.devices[index] && conf.devices[index].apiVersion == 'v2' && conf.devices[index].token);
 }
 
 function newConnection(type, mdns, apiVersion, token) {
-	const param={
-		polling: {
-			interval: conf.pollingIntervals[type],
-			stopOnError: true,
-		},
-		/* logger: {
-			method: console.log
-		} */
-	};
+	const param = {interval: conf.pollingIntervals[type]};
 	if(apiVersion == 2) {
-		// API v2 : https + token, le certificat de l'équipement est vérifié (appliance/<type>/<serial>)
-		param.api = {
-			token: token || undefined,
-			identifier: (HW.isMdnsTxtRecordV2(mdns.txt) && mdns.txt.id)?mdns.txt.id:HW.getCertificateIdentifier(type, mdns.txt.serial),
-		};
-		switch(type) {
-			case "HWE-P1": // P1 Meter
-				return new HW.P1MeterApiV2('https://'+mdns.ip, param);
-			case "SDM230-wifi": // kWh meter (1 phase)
-			case "HWE-KWH1":
-				return new HW.KwhMeter1PhaseApiV2('https://'+mdns.ip, param);
-			case "SDM630-wifi": // kWh meter (3 phases)
-			case "HWE-KWH3":
-				return new HW.KwhMeter3PhaseApiV2('https://'+mdns.ip, param);
-			case "HWE-BAT": // Plug-In Battery (API v2 uniquement)
-				return new HW.PlugInBatteryApiV2('https://'+mdns.ip, param);
-			// HWE-SKT, HWE-WTR, HWE-DSP : API v2 pas encore publiée par HomeWizard
-			default:
-				return null;
-		}
+		// API v2 : https + token, le certificat de l'équipement doit être émis pour son identifiant (appliance/<type>/<serial>)
+		param.token = token || undefined;
+		param.identifier = (HW.isMdnsTxtRecordV2(mdns.txt) && mdns.txt.id)?mdns.txt.id:HW.getCertificateIdentifier(type, mdns.txt.serial);
+		// HWE-SKT, HWE-WTR, HWE-DSP : API v2 pas encore publiée par HomeWizard
 	}
-	switch(type) {
-		case "HWE-P1": // P1 Meter
-			return new HW.P1MeterApi('http://'+mdns.ip, param);
-		case "HWE-SKT": // Energy Socket
-			return new HW.EnergySocketApi('http://'+mdns.ip, param);
-		case "HWE-WTR": // Watermeter (only on USB)
-			return new HW.WaterMeterApi('http://'+mdns.ip, param);
-		case "SDM230-wifi": // kWh meter (1 phase)
-		case "HWE-KWH1":
-			return new HW.KwhMeter1PhaseApi('http://'+mdns.ip, param);
-		case "SDM630-wifi": // kWh meter (3 phases)
-		case "HWE-KWH3":
-			return new HW.KwhMeter3PhaseApi('http://'+mdns.ip, param);
-		default:
-			return null;
-	}
+	return HW.newDevice(type, mdns.ip, apiVersion, param);
 }
 
 function removeConnection(index) {
@@ -569,6 +540,7 @@ function systemEvent(index, system) {
 	const ev = {};
 	if(typeof system.cloud_enabled == 'boolean') {ev.cloud_enabled = system.cloud_enabled?1:0;}
 	if(typeof system.status_led_brightness_pct == 'number') {ev.status_led_brightness_pct = system.status_led_brightness_pct;}
+	if(typeof system.api_v1_enabled == 'boolean') {ev.api_v1_enabled = system.api_v1_enabled?1:0;}
 	if(conn[index] && conn[index].isV2) {
 		// API v2 : le wifi n'est plus dans les mesures mais dans /api/system
 		const rssi = system.wifi_rssi_db;
@@ -661,6 +633,13 @@ function v2Measurement(response) {
 	return ev;
 }
 
+// version d'API inconnue (firmware ancien, champ absent) : on suppose qu'elle suffit, une erreur sera simplement notée
+function apiVersionAtLeast(version, minimum) {
+	if(typeof version != 'string' || !version) {return true;}
+	const result = HW.isApiVersionAtLeast(version, minimum);
+	return (result !== false);
+}
+
 // Ne doit jamais rejeter : appelée sans await depuis les événements (découverte, appairage...)
 function connect(index, type, mdns, quiet) {
 	return doConnect(index, type, mdns, quiet).catch((error) => {
@@ -678,7 +657,7 @@ function tokenInvalid(index) {
 async function doConnect(index, type, mdns, quiet) {
 	const v2 = useV2(index);
 	// if already exists but with different ip, delete previous object.
-	if(conn[index] && conn[index].polling.getData && conn[index].mdns.ip != mdns.ip) {
+	if(conn[index] && conn[index].mdns && conn[index].mdns.ip != mdns.ip) {
 		Logger.log("Changement d'IP de "+conn[index].mdns.ip+" à "+mdns.ip,LogType.DEBUG);
 		removeConnection(index);
 	}
@@ -724,7 +703,8 @@ async function doConnect(index, type, mdns, quiet) {
 
 	if(conn[index].isV2) {
 		startSystemInterval(index);
-		if(batteriesTypes.includes(type)) {startBatteriesInterval(index);}
+		// /api/batteries n'existe qu'à partir de l'API 2.1.0 (avant : 404)
+		if(batteriesTypes.includes(type) && apiVersionAtLeast(basic.api_version, '2.1.0')) {startBatteriesInterval(index);}
 		// API v2 : l'équipement pousse ses mesures par WebSocket, plus besoin de l'interroger
 		startWebSocket(index);
 	} else {
@@ -815,7 +795,7 @@ function startWebSocket(index) {
 	});
 	api.websocket.on('close', () => {
 		if(conn[index] !== api) {return;}
-		// La librairie se reconnecte toute seule (toutes les 5s) et se réabonne : une coupure courte est normale et reste
+		// La librairie se reconnecte toute seule (après 1s, puis de plus en plus espacé jusqu'à 5s) et se réabonne : une coupure courte est normale et reste
 		// silencieuse. Si aucune mesure n'est revenue après webSocketLostDelay, on le signale une seule fois.
 		Logger.log(index+' (WebSocket) : Connexion fermée, reconnexion automatique...',LogType.DEBUG);
 		if(!received || lost || timers.lost) {return;}
@@ -849,7 +829,7 @@ function discover() {
 	
 	discovery.on('response', (mdns) => {
 		const type=mdns.txt.product_type;
-		const isV2=(libHasV2 && HW.isMdnsTxtRecordV2(mdns.txt));
+		const isV2=HW.isMdnsTxtRecordV2(mdns.txt);
 		Logger.log("Découverte de : "+JSON.stringify(mdns, null, 4),LogType.DEBUG);
 
 		const index=type+'_'+mdns.txt.serial;
@@ -884,7 +864,7 @@ function discover() {
 				return;
 			}
 		} else if(mdns.txt.api_enabled == 0 && !useV2(index)) {
-			if(libHasV2 && v2Supported.includes(type)) {
+			if(v2Supported.includes(type)) {
 				Logger.log(index+" : API Locale (v1) pas activée dans l'application. Autorisez l'équipement en API v2 avec l'assistant du plugin, ou activez l'API Locale : Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);
 			} else {
 				console.log("API Locale pas activée dans l'application, Icône Engrenage > Mesures > Dispositif > API Locale...");

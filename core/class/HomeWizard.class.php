@@ -254,9 +254,9 @@ class HomeWizard extends eqLogic {
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id' || $key == 'batteries_mode') $cmd['subtype']='string';
 							if($key == 'wifi_strength') $cmd['unite']='%';
-							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full' || $key == 'cloud_enabled') $cmd['subtype']='binary';
+							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full' || $key == 'cloud_enabled' || $key == 'api_v1_enabled') $cmd['subtype']='binary';
 							// réglages système : l'état se lit sur les commandes action liées
-							if($key == 'cloud_enabled' || $key == 'status_led_brightness_pct') {
+							if($key == 'cloud_enabled' || $key == 'status_led_brightness_pct' || $key == 'api_v1_enabled') {
 								$cmd['isVisible']=0;
 								unset($cmd['template']);
 							}
@@ -309,7 +309,7 @@ class HomeWizard extends eqLogic {
 					}
 					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
 					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
-					if(isset($val['cloud_enabled']) || isset($val['status_led_brightness_pct'])) {
+					if(isset($val['cloud_enabled']) || isset($val['status_led_brightness_pct']) || isset($val['api_v1_enabled'])) {
 						$eqp->createSystemActions();
 						$eqp->applyGenericTypes();
 					}
@@ -770,7 +770,8 @@ class HomeWizard extends eqLogic {
 
 	/* Identifier et redémarrer : selon le type et l'API de l'équipement */
 	public function canIdentify() {
-		if ($this->getConfiguration('apiVersion') == 'v2') return true;
+		// API v2 : P1 Meter et Plug-In Battery (la librairie n'a pas identify() pour les kWh Meters)
+		if ($this->getConfiguration('apiVersion') == 'v2') return in_array(self::v2Family($this->getConfiguration('type')), ['p1', 'bat']);
 		return in_array($this->getConfiguration('type'), ['HWE-P1', 'HWE-SKT']);
 	}
 
@@ -786,11 +787,19 @@ class HomeWizard extends eqLogic {
 			$actions[] = ['action_cloud_on', __("Cloud activer", __FILE__), 'other', 'cloud_enabled', null, 1];
 			$actions[] = ['action_cloud_off', __("Cloud désactiver", __FILE__), 'other', 'cloud_enabled', ['actionConfirm'=>1], 1];
 		}
+		// API v2, P1 Meter et kWh Meters : couper l'API v1 réserve l'équipement aux clients autorisés par le bouton
+		if (is_object($this->getCmd(null, 'api_v1_enabled')) && $writable && $this->getConfiguration('apiVersion') == 'v2') {
+			$actions[] = ['action_api_v1_on', __("API v1 activer", __FILE__), 'other', 'api_v1_enabled', null, 0];
+			$actions[] = ['action_api_v1_off', __("API v1 désactiver", __FILE__), 'other', 'api_v1_enabled', ['actionConfirm'=>1], 0];
+		}
 		if (is_object($this->getCmd(null, 'status_led_brightness_pct'))) {
 			$actions[] = ['action_status_led_brightness', __("Luminosité led", __FILE__), 'slider', 'status_led_brightness_pct', ['minValue'=>0, 'maxValue'=>100], 1];
 		}
 		if ($this->canIdentify()) $actions[] = ['action_identify', __("Identifier", __FILE__), 'other', '', null, 1];
 		if ($this->canReboot()) $actions[] = ['action_reboot', __("Redémarrer", __FILE__), 'other', '', ['actionConfirm'=>1], 0];
+		// Identifier créé sur un kWh Meter en API v2 par une version précédente : il ne peut pas fonctionner
+		$identify = $this->getCmd('action', 'action_identify');
+		if (is_object($identify) && !$this->canIdentify() && $this->getConfiguration('apiVersion') == 'v2') $identify->remove();
 		foreach($actions as $action) {
 			if (is_object($this->getCmd(null, $action[0]))) continue;
 			$cmd = ['logicalId'=>$action[0], 'name'=>$action[1], 'type'=>'action', 'subtype'=>$action[2], 'isVisible'=>$action[5]];
@@ -1497,12 +1506,16 @@ class HomeWizardCmd extends cmd {
 			case 'action_reboot':
 			case 'action_cloud_on':
 			case 'action_cloud_off':
+			case 'action_api_v1_on':
+			case 'action_api_v1_off':
 			case 'action_status_led_brightness':
 				// réglages système de l'équipement
 				if ($logical == 'action_reboot') {
 					$request = ['cmd'=>'reboot', 'id'=>$eqLogical];
 				} elseif ($logical == 'action_status_led_brightness') {
 					$request = ['cmd'=>'led', 'id'=>$eqLogical, 'val'=>intval($_options['slider'] ?? 0)];
+				} elseif (strpos($logical, 'action_api_v1_') === 0) {
+					$request = ['cmd'=>'apiv1', 'id'=>$eqLogical, 'val'=>($logical == 'action_api_v1_on')?1:0];
 				} else {
 					$request = ['cmd'=>'cloud', 'id'=>$eqLogical, 'val'=>($logical == 'action_cloud_on')?1:0];
 				}
