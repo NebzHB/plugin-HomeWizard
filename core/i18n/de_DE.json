@@ -24,6 +24,7 @@
         "Aucun équipement trouvé avec l'id": "Keine Geräte mit der id gefunden",
         "Autorisation API v2 partagée avec un autre Jeedom, laissée sur l'équipement": "API-v2-Berechtigung, die mit einem anderen Jeedom geteilt wird und auf dem Gerät verbleibt",
         "Autorisation API v2 retirée de l'équipement": "API-v2-Berechtigung vom Gerät entzogen",
+        "Autres valeurs": "Sonstige Werte",
         "Batteries": "Batterien",
         "Batteries arrêter la charge complète": "Batteries: Vollständige Ladung beenden",
         "Batteries autoriser la charge": "Batterien laden zulassen",
