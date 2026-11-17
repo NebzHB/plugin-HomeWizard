@@ -714,6 +714,36 @@ class HomeWizard extends eqLogic {
 		return self::v2DescribeUsers($result['users'] ?? []);
 	}
 
+	/* API v2 : l'API v1 peut être coupée sur le P1 Meter et les kWh Meters (pas sur la Plug-In Battery, qui n'en a pas) */
+	public function canSetApiV1() {
+		return ($this->getConfiguration('apiVersion') == 'v2' && in_array(self::v2Family($this->getConfiguration('type')), ['p1', 'kwh']));
+	}
+
+	/* 1 : API v1 active, 0 : coupée, null : pas encore connu (l'équipement n'a pas encore envoyé ses réglages) */
+	public function apiV1State() {
+		if (!$this->canSetApiV1()) return null;
+		$cmd = $this->getCmd('info', 'api_v1_enabled');
+		if (!is_object($cmd)) return null;
+		$value = $cmd->execCmd();
+		return ($value === '' || $value === null) ? null : intval($value);
+	}
+
+	public function setApiV1($_enable) {
+		if (!$this->canSetApiV1()) {
+			throw new Exception(__("Couper l'API v1 n'est possible qu'en API v2, sur le Compteur P1 et les kWh Meters", __FILE__));
+		}
+		$result = self::hwExecute('cmd', ['cmd'=>'apiv1', 'id'=>$this->getLogicalId(), 'val'=>($_enable)?1:0]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		if ($result['result'] != 'ok') {
+			throw new Exception(is_string($result['error'] ?? null) ? $result['error'] : __("Erreur du démon", __FILE__));
+		}
+		log::add('HomeWizard', 'info', (($_enable)?__("API v1 réactivée sur", __FILE__):__("API v1 coupée sur", __FILE__)).' '.$this->getHumanName());
+		$this->checkAndUpdateCmd('api_v1_enabled', ($_enable)?1:0);
+		return ($_enable)?1:0;
+	}
+
 	public function v2DeleteUser($name) {
 		$result = self::hwExecute('userDelete', ['id'=>$this->getLogicalId(), 'name'=>$name]);
 		if (!is_array($result) || !isset($result['result'])) {
@@ -906,7 +936,9 @@ class HomeWizard extends eqLogic {
 				'v2ApiVersion'=>$eqp->getConfiguration('v2ApiVersion'),
 				'staleCmds'=>$eqp->v2StaleCmds(),
 				'v2Only'=>in_array($type, self::v2OnlyTypes()),
-				'authOnly'=>($eqp->getMigrationState() == 'pair')
+				'authOnly'=>($eqp->getMigrationState() == 'pair'),
+				'canApiV1'=>$eqp->canSetApiV1(),
+				'apiV1'=>$eqp->apiV1State()
 			];
 		}
 		return $return;

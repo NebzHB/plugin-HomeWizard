@@ -190,6 +190,14 @@ $hwMigrationStart = init('eqLogic_id');
 				<strong class="cmds"></strong>.
 				{{Utilisez à la place les commandes des totaux (import et export en kWh).}}
 			</div>
+			<div class="alert alert-info hwMig_apiV1" style="display:none;text-align:left;">
+				<i class="fas fa-shield-alt"></i> <strong>{{Pour aller plus loin : couper l'API v1}}</strong><br />
+				{{Jeedom n'utilise plus l'ancienne API v1 de cet équipement. Vous pouvez la couper : il ne sera alors plus accessible qu'aux applications autorisées par un appui sur son bouton (Jeedom, l'application HomeWizard...).}}
+				{{Une application qui lit encore l'API v1 (ancienne intégration, script...) ne recevra plus rien. Vous pourrez la réactiver depuis la liste de l'assistant, et un retour à l'API v1 la réactive automatiquement.}}
+				<br /><br />
+				<a class="btn btn-warning btn-sm" id="bt_hwMigApiV1Off"><i class="fas fa-power-off"></i> {{Couper l'API v1}}</a>
+				<span class="hwMig_apiV1Done" style="display:none;"><i class="fas fa-check"></i> {{API v1 coupée}}</span>
+			</div>
 			<a class="btn btn-success" id="bt_hwMigNext" style="display:none;"><i class="fas fa-arrow-right"></i> {{Équipement suivant}} (<span class="nb"></span>)</a>
 			<a class="btn btn-default" id="bt_hwMigBackDone"><i class="fas fa-list"></i> {{Retour à la liste}}</a>
 			<a class="btn btn-primary" id="bt_hwMigFinish"><i class="fas fa-check"></i> {{Terminer}}</a>
@@ -269,7 +277,11 @@ $hwMigrationStart = init('eqLogic_id');
 			html += '<td><img src="' + esc(eq.image) + '" /></td>';
 			html += '<td>' + eq.name + '</td>'; // getHumanName : déjà du html Jeedom
 			html += '<td><span class="label label-default">' + esc(eq.type) + '</span></td>';
-			html += '<td><span class="label label-' + ((eq.apiVersion == 'v2') ? 'success' : 'default') + '">' + esc(eq.apiVersion || 'v1') + '</span></td>';
+			html += '<td><span class="label label-' + ((eq.apiVersion == 'v2') ? 'success' : 'default') + '">' + esc(eq.apiVersion || 'v1') + '</span>';
+			if (eq.canApiV1 && eq.apiV1 === 0) {
+				html += '<br /><small><i class="fas fa-shield-alt"></i> {{API v1 coupée}}</small>';
+			}
+			html += '</td>';
 			html += '<td><span class="label label-' + state.label + '" style="white-space:normal;">' + state.text + '</span>';
 			if (canStart(eq) && eq.staleCmds && eq.staleCmds.length > 0) {
 				html += '<br /><small><i class="fas fa-exclamation-triangle"></i> {{Ne seront plus mises à jour en API v2 :}} ' + esc(eq.staleCmds.join(', ')) + '</small>';
@@ -282,6 +294,11 @@ $hwMigrationStart = init('eqLogic_id');
 			}
 			if (eq.state == 'v2') {
 				html += '<a class="btn btn-default btn-xs bt_hwMigUsers"><i class="fas fa-users"></i> {{Utilisateurs}}</a> ';
+			}
+			if (eq.canApiV1 && eq.apiV1 === 1) {
+				html += '<a class="btn btn-warning btn-xs bt_hwMigApiV1" data-enable="0"><i class="fas fa-power-off"></i> {{Couper l\'API v1}}</a> ';
+			} else if (eq.canApiV1 && eq.apiV1 === 0) {
+				html += '<a class="btn btn-default btn-xs bt_hwMigApiV1" data-enable="1"><i class="fas fa-power-off"></i> {{Réactiver l\'API v1}}</a> ';
 			}
 			if (eq.canRevert) {
 				html += '<a class="btn btn-default btn-xs bt_hwMigRevert"><i class="fas fa-undo"></i> {{Revenir à l\'API v1}}</a>';
@@ -455,6 +472,11 @@ $hwMigrationStart = init('eqLogic_id');
 		current = null;
 		changed = true;
 		var auth = (eq.authOnly || eq.state == 'invalid');
+		// P1 et kWh Meters : proposer de couper l'API v1 maintenant que Jeedom n'en a plus besoin
+		var apiV1 = (eq.family == 'p1' || eq.family == 'kwh') && eq.apiV1 !== 0;
+		$('#div_hwMigration .hwMig_apiV1').toggle(apiV1).data('id', eq.id);
+		$('#bt_hwMigApiV1Off').show();
+		$('#div_hwMigration .hwMig_apiV1Done').hide();
 		$('#hwMig_doneTitle').text((auth) ? "{{Autorisation réussie}}" : "{{Migration réussie}}");
 		$('#hwMig_doneText').text((auth) ? "{{est maintenant autorisé, ses valeurs arrivent.}}" : "{{utilise maintenant l'API v2.}}");
 		$('#hwMig_doneName').html(eq.name);
@@ -466,6 +488,27 @@ $hwMigrationStart = init('eqLogic_id');
 			$('#bt_hwMigNext').toggle(next.length > 0).data('next', next[0]).find('.nb').text(next.length);
 			$('#bt_hwMigFinish').toggleClass('btn-primary', next.length == 0).toggleClass('btn-default', next.length > 0);
 			showView('done');
+		});
+	}
+
+	function setApiV1(id, enable, callback) {
+		$.ajax({
+			type: 'POST',
+			url: 'plugins/HomeWizard/core/ajax/HomeWizard.ajax.php',
+			data: { action: 'setApiV1', id: id, enable: (enable) ? 1 : 0 },
+			dataType: 'json',
+			global: false,
+			error: function(request, status, error) {
+				handleAjaxError(request, status, error);
+			},
+			success: function(data) {
+				if (data.state != 'ok') {
+					jeedomUtils.showAlert({ message: data.result, level: 'danger' });
+					return;
+				}
+				jeedomUtils.showAlert({ message: (enable) ? "{{API v1 réactivée}}" : "{{API v1 coupée}}", level: 'success' });
+				if (callback) { callback(); }
+			}
 		});
 	}
 
@@ -505,6 +548,23 @@ $hwMigrationStart = init('eqLogic_id');
 		dialog.confirm("{{Supprimer cet utilisateur de l'équipement ?}} " + esc(name) + warning, function(result) {
 			if (!result) { return; }
 			usersRequest({ action: 'deleteUser', id: usersEq.id, name: name });
+		});
+	}).on('click', '.bt_hwMigApiV1', function() {
+		var id = $(this).closest('tr').data('id');
+		var enable = $(this).data('enable') == 1;
+		if (enable) {
+			setApiV1(id, true, function() { refreshList(); });
+			return;
+		}
+		var dialog = (typeof jeeDialog !== 'undefined') ? jeeDialog : bootbox;
+		dialog.confirm("{{Couper l'API v1 de cet équipement ? Il ne sera plus accessible qu'aux applications autorisées par son bouton, une application qui lit encore l'API v1 ne recevra plus rien.}}", function(result) {
+			if (result) { setApiV1(id, false, function() { refreshList(); }); }
+		});
+	}).on('click', '#bt_hwMigApiV1Off', function() {
+		var id = $('#div_hwMigration .hwMig_apiV1').data('id');
+		setApiV1(id, false, function() {
+			$('#bt_hwMigApiV1Off').hide();
+			$('#div_hwMigration .hwMig_apiV1Done').show();
 		});
 	}).on('click', '.bt_hwMigRevert', function() {
 		var id = $(this).closest('tr').data('id');
