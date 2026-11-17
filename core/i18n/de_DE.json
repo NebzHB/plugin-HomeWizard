@@ -15,6 +15,8 @@
         "JSONRPC object not defined": "JSONRPC-Objekt nicht definiert"
     },
     "plugins\/HomeWizard\/core\/class\/HomeWizard.class.php": {
+        "API v1 activer": "API v1 aktivieren",
+        "API v1 désactiver": "API v1 deaktivieren",
         "API v2 disponible sur": "API v2 verfügbar unter",
         "Allumer \/ Eteindre": "Ein-\/Ausschalten",
         "Appui sur le bouton non abouti pour": "Tastenbetätigung fehlgeschlagen für",
