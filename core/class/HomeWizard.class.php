@@ -1247,7 +1247,7 @@ class HomeWizard extends eqLogic {
 			$others .= '<tr><td>'.$cmd->getName().'</td><td>'.$span($cmd, ($cmd->getSubType() == 'numeric')?'number':'text', 2).' '.$cmd->getUnite().'</td></tr>';
 		}
 		if ($others != '') {
-			$foot .= '<span class="hw-more cursor" title="'.__("Autres valeurs", __FILE__).'"><i class="fas fa-list-ul"></i> '.__("Autres valeurs", __FILE__).'</span>';
+			$foot .= '<span class="hw-more cursor" title="'.__("Autres valeurs", __FILE__).'"><i class="fas fa-list-ul"></i></span>';
 			$others = '<div class="hw-popup"><table>'.$others.'</table></div>';
 		}
 		$replace['#hw_others#'] = $others;
