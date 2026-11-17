@@ -73,6 +73,7 @@
 				return number.toLocaleString(undefined, {maximumFractionDigits: decimals});
 			};
 			var apply = function(el, value) {
+				var root = el.closest('.hw-widget');
 				var kind = el.getAttribute('data-hw_kind');
 				var number = parseFloat(value);
 				switch (kind) {
@@ -97,16 +98,17 @@
 						el.textContent = format(value, parseInt(el.getAttribute('data-hw_dec')) || 0);
 				}
 			};
-			var byCmd = {};
+			var ids = {};
 			root.querySelectorAll('[data-hw_cmd]').forEach(function(el) {
-				var id = el.getAttribute('data-hw_cmd');
-				(byCmd[id] = byCmd[id] || []).push(el);
+				ids[el.getAttribute('data-hw_cmd')] = true;
 				apply(el, el.getAttribute('data-hw_value'));
 			});
-			Object.keys(byCmd).forEach(function(id) {
+			Object.keys(ids).forEach(function(id) {
+				// Le core ignore une fonction identique déjà enregistrée pour la commande : après un redessin du widget c'est
+				// donc l'ancienne qui reste. Elle cherche les éléments dans la page à chaque valeur, jamais ceux d'avant.
 				jeedom.cmd.addUpdateFunction(id, function(_options) {
 					var value = (_options.value !== undefined) ? _options.value : _options.display_value;
-					byCmd[id].forEach(function(el) {
+					document.querySelectorAll('.hw-widget [data-hw_cmd="' + id + '"]').forEach(function(el) {
 						apply(el, value);
 					});
 				});
