@@ -9,7 +9,7 @@
     "start": "echo \"Error: configure and run hkControl to start\" && exit 1"
   },
   "engines": {
-    "node": ">=22",
+    "node": ">=22.19.0",
     "npm": ">=10.5.1"
   },
   "repository": {
@@ -21,12 +21,9 @@
     "HomeWizard"
   ],
   "dependencies": {
-	"homewizard-energy-api": "github:NebzHB/homewizard-energy-api#dist",
+	"homewizard-energy-api": ">=3.0.0 <4",
 	"express": ">=5.3.0",
 	"axios": ">=1.21.1"
-  },
-  "githubMinVersions": {
-	"homewizard-energy-api": ">=1.6.0"
   },
   "devDependencies": {
 	"eslint": "*"
