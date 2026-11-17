@@ -24,6 +24,7 @@
         "Aucun équipement trouvé avec l'id": "No Equipment found with id",
         "Autorisation API v2 partagée avec un autre Jeedom, laissée sur l'équipement": "API v2 authorization shared with another Jeedom, stored on the device",
         "Autorisation API v2 retirée de l'équipement": "API v2 authorization revoked for the device",
+        "Autres valeurs": "Other values",
         "Batteries": "Batteries",
         "Batteries arrêter la charge complète": "Batteries stop charging when fully charged",
         "Batteries autoriser la charge": "Batteries that support charging",
