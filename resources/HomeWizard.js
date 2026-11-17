@@ -24,8 +24,16 @@ const pollingIntervalsDefaults={
 const v2Supported=["HWE-P1","SDM230-wifi","HWE-KWH1","SDM630-wifi","HWE-KWH3","HWE-BAT"];
 // Equipements qui n'existent qu'en API v2
 const v2Only=["HWE-BAT"];
+// Equipements qui pilotent un groupe de Plug-In Batteries (/api/batteries, API v2 uniquement)
+const batteriesTypes=["HWE-P1","SDM230-wifi","HWE-KWH1","SDM630-wifi","HWE-KWH3"];
+const batteriesMinInterval=5000;
+const batteriesIdleInterval=300000; // sans batterie associée (ou endpoint absent), on revérifie toutes les 5 minutes
 const systemPollingInterval=60000;
 const webSocketFallbackDelay=15000; // sans mesure reçue par WebSocket après ce délai, on repasse en polling
+const webSocketLostDelay=30000; // une coupure du WebSocket plus courte est silencieuse (la librairie se reconnecte seule)
+const onlineCycles=3; // un équipement est en ligne s'il a envoyé un message pendant les 3 derniers cycles (période configurée)
+const onlineMinDelay=10000; // jamais moins de 10s : une reconnexion du WebSocket prend déjà 5s
+const v1FallbackDelay=10000; // équipement annoncé seulement en API v2 et pas autorisé : on tente quand même l'API v1
 const pairDefaultTimeout=120; // secondes
 const pairInterval=2000;
 
@@ -71,6 +79,10 @@ const systemIntervals = {};
 const wsTimers = {}; // API v2 : timers du WebSocket par équipement {fallback, throttle}
 const known = {}; // derniers mdns reçus par équipement : {v1: mdns, v2: mdns}
 const pairings = {}; // appairages (migration API v2) en cours
+const batteriesTimers = {}; // API v2 : timer de lecture du groupe de batteries par équipement
+const batteriesState = {}; // dernier état du groupe de batteries par équipement
+const lastSeen = {}; // dernier message reçu par équipement
+const onlineState = {}; // dernier état en ligne envoyé à Jeedom par équipement
 conf.devices = {}; // {id: {apiVersion: 'v2', token: 'xxx'}} reçu de Jeedom
 // La librairie doit supporter l'API v2 (>= 1.6.0)
 const libHasV2 = (typeof HW.P1MeterApiV2 == 'function');
@@ -170,6 +182,50 @@ myCommands.cmd = async function(req, res) {
 				Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
 				res.json({'result':'ok'});
 			}
+		} else if(req.query.cmd == 'reboot') {
+			if(typeof conn[req.query.id].reboot != 'function') {
+				throw new Error("Cet équipement ne peut pas être redémarré par l'API");
+			}
+			await conn[req.query.id].reboot();
+			Logger.log("Redémarrage demandé : "+req.query.id,LogType.Info);
+			res.json({'result':'ok'});
+		} else if(req.query.cmd == 'cloud' || req.query.cmd == 'led') {
+			// réglages système : communication avec le cloud HomeWizard, luminosité de la led d'état (API v2)
+			if(typeof conn[req.query.id].updateSystem != 'function') {
+				throw new Error("Cet équipement n'a pas ce réglage");
+			}
+			let params;
+			if(req.query.cmd == 'cloud') {
+				params={cloud_enabled: (req.query.val == 1)};
+			} else {
+				if(!conn[req.query.id].isV2) {throw new Error("La luminosité de la led nécessite l'API v2");}
+				params={status_led_brightness_pct: Math.max(0, Math.min(100, parseInt(req.query.val) || 0))};
+			}
+			result=await conn[req.query.id].updateSystem(params);
+			Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info);
+			systemEvent(req.query.id, result);
+			res.json({'result':'ok'});
+		} else if(req.query.cmd == 'batteries_mode' || req.query.cmd == 'batteries_permission' || req.query.cmd == 'batteries_charge_to_full') {
+			// pilotage du groupe de Plug-In Batteries associé à ce compteur (API v2)
+			if(typeof conn[req.query.id].updateBatteries != 'function') {
+				throw new Error("Cet équipement ne pilote pas de batteries (API v2 nécessaire)");
+			}
+			let params;
+			if(req.query.cmd == 'batteries_mode') {
+				params={mode: req.query.val};
+			} else if(req.query.cmd == 'batteries_charge_to_full') {
+				params={charge_to_full: (req.query.val == 1)};
+			} else {
+				// les permissions s'envoient en liste complète : on part du dernier état connu
+				const current=(batteriesState[req.query.id] && batteriesState[req.query.id].permissions) || [];
+				const permissions=current.filter((permission) => permission != req.query.val);
+				if(req.query.state == 1) {permissions.push(req.query.val);}
+				params={permissions: permissions};
+			}
+			result=await conn[req.query.id].updateBatteries(params);
+			Logger.log("Réponse de la commande OK : "+JSON.stringify(result),LogType.Info); 
+			eventReceived(req.query.id,batteriesEvent(req.query.id,result));
+			res.json({'result':'ok'});
 		} else {
 			const error="Commande "+req.query.cmd+" inconnue !";
 			Logger.log(error,LogType.ERROR); 
@@ -301,24 +357,76 @@ myCommands.pairCancel = function(req, res) {
 myCommands.unpair = async function(req, res) {
 	res.type('json');
 	const id = req.query.id;
-	Logger.log("Reçu une demande de retour à l'API v1 pour "+id,LogType.INFO);
+	Logger.log("Reçu une demande de "+((req.query.forget == 1)?"retrait de l'autorisation API v2 (équipement supprimé)":"retour à l'API v1")+" pour "+id,LogType.INFO);
+	const type = id.split('_')[0];
 	let deleted = false;
-	try {
-		if (conn[id] && conn[id].isV2) {
-			await conn[id].deleteUser();
-			deleted = true;
+	// keepUser : le token est partagé avec un autre Jeedom (copie), on ne le supprime pas de l'équipement
+	if (req.query.keepUser != 1) {
+		// équipement plus connecté (hors ligne au démarrage...) : connexion temporaire avec son token pour le supprimer
+		const temporary = !(conn[id] && conn[id].isV2);
+		const api = (!temporary)?conn[id]:((useV2(id) && known[id])?newConnection(type, known[id].v2 || known[id].v1, 2, conf.devices[id].token):null);
+		try {
+			if (api) {
+				await api.deleteUser();
+				deleted = true;
+			}
+		} catch (e) {
+			Logger.log(id+" : Impossible de supprimer l'utilisateur sur l'équipement : "+(e.errorCode || e.message || e),LogType.WARNING);
 		}
-	} catch (e) {
-		Logger.log(id+" : Impossible de supprimer l'utilisateur sur l'équipement : "+(e.errorCode || e.message || e),LogType.WARNING);
+		if (api && temporary) {api.close().catch(() => {});}
 	}
 	delete conf.devices[id];
-	const type = id.split('_')[0];
-	const mdns = (known[id])?known[id].v1:null;
 	removeConnection(id);
-	if (mdns) {connect(id, type, mdns);}
+	if (req.query.forget == 1) {
+		// équipement supprimé de Jeedom : on ne le reconnecte pas en API v1
+		delete lastSeen[id];
+		delete onlineState[id];
+	} else {
+		const mdns = (known[id])?known[id].v1:null;
+		if (mdns) {connect(id, type, mdns);}
+	}
 	res.json({'result':'ok','userDeleted':deleted});
 };
 
+
+/** Gestion des utilisateurs (autorisations) enregistrés sur un équipement en API v2 **/
+myCommands.users = async function(req, res) {
+	res.type('json');
+	const id = req.query.id;
+	if (!conn[id] || !conn[id].isV2) {
+		res.json({'result':'ko','error':"Equipement "+id+" non connecté en API v2"});
+		return;
+	}
+	try {
+		res.json({'result':'ok','users':await conn[id].getUsers()});
+	} catch (e) {
+		res.json({'result':'ko','error':String(e.errorCode || e.message || e)});
+	}
+};
+
+myCommands.userDelete = async function(req, res) {
+	res.type('json');
+	const id = req.query.id;
+	const name = req.query.name;
+	Logger.log("Reçu une demande de suppression de l'utilisateur "+name+" sur "+id,LogType.INFO);
+	if (!conn[id] || !conn[id].isV2 || !name) {
+		res.json({'result':'ko','error':"Equipement "+id+" non connecté en API v2"});
+		return;
+	}
+	try {
+		const users = await conn[id].getUsers();
+		// l'utilisateur de ce Jeedom se retire par le retour à l'API v1 ou la suppression de l'équipement
+		if (users.some((user) => user.name == name && user.current)) {
+			res.json({'result':'ko','error':"C'est l'utilisateur de ce Jeedom"});
+			return;
+		}
+		await conn[id].deleteUser(name);
+		res.json({'result':'ok','users':await conn[id].getUsers()});
+	} catch (e) {
+		Logger.log(id+" : Suppression de l'utilisateur "+name+" KO : "+(e.errorCode || e.message || e),LogType.WARNING);
+		res.json({'result':'ko','error':String(e.errorCode || e.message || e)});
+	}
+};
 
 // prepare commands
 app.get('/stop', myCommands.stop);
@@ -327,6 +435,8 @@ app.get('/config', myCommands.config);
 app.get('/pair', myCommands.pair);
 app.get('/pairCancel', myCommands.pairCancel);
 app.get('/unpair', myCommands.unpair);
+app.get('/users', myCommands.users);
+app.get('/userDelete', myCommands.userDelete);
 app.use(function(err, req, res, _next) {
 	res.type('json');
 	Logger.log(err,LogType.ERROR);
@@ -359,6 +469,11 @@ const server = app.listen(conf.serverPort, () => {
 	Logger.log("Démon prêt et à l'écoute sur "+conf.serverPort+" !",LogType.INFO);
 	Logger.log("Attente de la réception de la configuration...",LogType.INFO);
 	jsend({'eventType': 'daemonReady', 'result':true});
+});
+server.on('error', (error) => {
+	// port déjà utilisé... : inutile de rester en vie sans pouvoir écouter Jeedom
+	Logger.log("Impossible d'écouter sur le port "+conf.serverPort+" : "+error,LogType.ERROR);
+	process.exit(1);
 });
 
 // API v2 : un utilisateur (token) Jeedom existe pour cet équipement
@@ -425,9 +540,15 @@ function removeConnection(index) {
 		clearInterval(systemIntervals[index]);
 		delete systemIntervals[index];
 	}
+	if(batteriesTimers[index]) {
+		clearTimeout(batteriesTimers[index]);
+		delete batteriesTimers[index];
+	}
+	delete batteriesState[index];
 	if(wsTimers[index]) {
 		clearTimeout(wsTimers[index].fallback);
 		clearTimeout(wsTimers[index].throttle);
+		clearTimeout(wsTimers[index].lost);
 		delete wsTimers[index];
 	}
 	if(conn[index]) {
@@ -442,26 +563,86 @@ function removeConnection(index) {
 	}
 }
 
-// API v2 : le wifi n'est plus dans les mesures mais dans /api/system
+// réglages système remontés à Jeedom (uniquement ceux que l'équipement donne)
+function systemEvent(index, system) {
+	if(!system || typeof system != 'object') {return;}
+	const ev = {};
+	if(typeof system.cloud_enabled == 'boolean') {ev.cloud_enabled = system.cloud_enabled?1:0;}
+	if(typeof system.status_led_brightness_pct == 'number') {ev.status_led_brightness_pct = system.status_led_brightness_pct;}
+	if(conn[index] && conn[index].isV2) {
+		// API v2 : le wifi n'est plus dans les mesures mais dans /api/system
+		const rssi = system.wifi_rssi_db;
+		if(system.wifi_ssid !== undefined) {ev.wifi_ssid = system.wifi_ssid;}
+		if(typeof rssi == 'number') {
+			ev.wifi_rssi_db = rssi;
+			// même calcul que le client officiel HomeWizard, garde la commande wifi_strength (%) de l'API v1 vivante
+			ev.wifi_strength = (rssi <= -100 || rssi == 0)?0:((rssi >= -50)?100:2 * (rssi + 100));
+		}
+	}
+	if(Object.keys(ev).length) {eventReceived(index,ev);}
+}
+
+// /api/system : wifi (API v2) et réglages système (cloud, led)
 function startSystemInterval(index) {
 	const getSystem = async () => {
+		if(!conn[index] || typeof conn[index].getSystem != 'function') {return;}
 		try {
-			const system = await conn[index].getSystem();
-			const rssi = system.wifi_rssi_db;
-			const ev = {wifi_ssid: system.wifi_ssid, wifi_rssi_db: rssi};
-			// même calcul que le client officiel HomeWizard, garde la commande wifi_strength (%) de l'API v1 vivante
-			if(typeof rssi == 'number') {
-				ev.wifi_strength = (rssi <= -100 || rssi == 0)?0:((rssi >= -50)?100:2 * (rssi + 100));
-			}
-			eventReceived(index,ev);
+			systemEvent(index, await conn[index].getSystem());
 		} catch(error) {
 			Logger.log(index+' (getSystem) : '+error,LogType.DEBUG);
+			// utilisateur supprimé pendant que le démon tourne
+			if(error.errorCode == 'user:unauthorized' && conn[index]) {tokenInvalid(index);}
 		}
 	};
 	if(!systemIntervals[index]) {
 		getSystem();
 		systemIntervals[index] = setInterval(getSystem, systemPollingInterval);
 	}
+}
+
+// API v2 : état du groupe de Plug-In Batteries associé à un compteur, en valeurs simples pour Jeedom
+function batteriesEvent(index, batteries) {
+	batteriesState[index] = batteries;
+	const ev = {
+		batteries_count: batteries.battery_count,
+		batteries_mode: batteries.mode,
+		batteries_power_w: batteries.power_w,
+		batteries_target_power_w: batteries.target_power_w,
+		batteries_max_consumption_w: batteries.max_consumption_w,
+		batteries_max_production_w: batteries.max_production_w,
+	};
+	if(Array.isArray(batteries.permissions)) {
+		ev.batteries_charge_allowed = (batteries.permissions.includes('charge_allowed'))?1:0;
+		ev.batteries_discharge_allowed = (batteries.permissions.includes('discharge_allowed'))?1:0;
+	}
+	if(typeof batteries.charge_to_full == 'boolean') {ev.batteries_charge_to_full = (batteries.charge_to_full)?1:0;}
+	return ev;
+}
+
+// API v2 : le compteur P1 et les kWh Meters pilotent les Plug-In Batteries qui leur sont associées
+function startBatteriesInterval(index) {
+	const api = conn[index];
+	if(batteriesTimers[index] || typeof api.getBatteries != 'function') {return;}
+	const activeInterval = Math.max(conf.pollingIntervals[index.split('_')[0]] || 0, batteriesMinInterval);
+	const poll = async () => {
+		let delay = batteriesIdleInterval;
+		try {
+			const batteries = await api.getBatteries();
+			if(conn[index] !== api) {return;}
+			if(batteries.battery_count === 0) {
+				// plus aucune batterie associée : on le signale une fois si on en avait
+				if(batteriesState[index] && batteriesState[index].battery_count !== 0) {eventReceived(index,batteriesEvent(index,batteries));}
+				batteriesState[index] = batteries;
+			} else {
+				eventReceived(index,batteriesEvent(index,batteries));
+				delay = activeInterval;
+			}
+		} catch(error) {
+			Logger.log(index+' (getBatteries) : '+(error.errorCode || error),LogType.DEBUG);
+		}
+		if(conn[index] === api) {batteriesTimers[index] = setTimeout(poll, delay);}
+	};
+	batteriesTimers[index] = setTimeout(poll, 1000);
 }
 
 // API v2 : adapte une mesure avant envoi à Jeedom
@@ -480,7 +661,21 @@ function v2Measurement(response) {
 	return ev;
 }
 
-async function connect(index, type, mdns) {
+// Ne doit jamais rejeter : appelée sans await depuis les événements (découverte, appairage...)
+function connect(index, type, mdns, quiet) {
+	return doConnect(index, type, mdns, quiet).catch((error) => {
+		Logger.log(index+' (connect) : '+(error && error.stack || error),LogType.ERROR);
+	});
+}
+
+function tokenInvalid(index) {
+	Logger.log(index+" : Le token de l'API v2 n'est plus valide (utilisateur supprimé ou équipement réinitialisé), refaites l'autorisation de cet équipement avec l'assistant",LogType.ERROR);
+	jsend({eventType: 'tokenInvalid', id: index});
+	removeConnection(index);
+}
+
+// quiet : tentative en API v1 sans annonce v1 reçue, un échec est normal (API locale v1 désactivée) et n'est pas retenté
+async function doConnect(index, type, mdns, quiet) {
 	const v2 = useV2(index);
 	// if already exists but with different ip, delete previous object.
 	if(conn[index] && conn[index].polling.getData && conn[index].mdns.ip != mdns.ip) {
@@ -504,8 +699,11 @@ async function connect(index, type, mdns) {
 		basic = await conn[index].getBasicInformation();
 	} catch(error) {
 		if(conn[index] && conn[index].isV2 && error.errorCode == 'user:unauthorized') {
-			Logger.log(index+" : Le token de l'API v2 n'est plus valide (utilisateur supprimé ou équipement réinitialisé), refaites la migration de cet équipement",LogType.ERROR);
-			jsend({eventType: 'tokenInvalid', id: index});
+			tokenInvalid(index);
+			return;
+		}
+		if(quiet) {
+			Logger.log(index+" : Pas de réponse en API v1 ("+error+"), l'équipement attend son autorisation en API v2",LogType.DEBUG);
 			removeConnection(index);
 			return;
 		}
@@ -526,9 +724,12 @@ async function connect(index, type, mdns) {
 
 	if(conn[index].isV2) {
 		startSystemInterval(index);
+		if(batteriesTypes.includes(type)) {startBatteriesInterval(index);}
 		// API v2 : l'équipement pousse ses mesures par WebSocket, plus besoin de l'interroger
 		startWebSocket(index);
 	} else {
+		// API v1 : /api/v1/system ne donne que le réglage du cloud
+		startSystemInterval(index);
 		startPolling(index);
 	}
 }
@@ -568,9 +769,12 @@ function startPolling(index) {
 // API v2 : les mesures arrivent par WebSocket dès qu'elles changent (chaque seconde pour un P1 Meter).
 // Jeedom reçoit au plus une mesure par intervalle de polling configuré, toujours la plus récente.
 function startWebSocket(index) {
+	// déjà démarré pour cette connexion (connect() est rappelé à chaque annonce mDNS de l'équipement, v1 et v2)
+	if(wsTimers[index]) {return;}
 	const api = conn[index];
 	const interval = conf.pollingIntervals[index.split('_')[0]];
-	const timers = {fallback: null, throttle: null};
+	const timers = {fallback: null, throttle: null, lost: null};
+	let lost = false; // coupure longue signalée
 	let lastSent = 0;
 	let pending = null;
 	let received = false;
@@ -588,6 +792,14 @@ function startWebSocket(index) {
 			received = true;
 			Logger.log(index+' (WebSocket) : Connecté, les mesures sont poussées par l\'équipement',LogType.INFO);
 		}
+		if(timers.lost) {
+			clearTimeout(timers.lost);
+			timers.lost = null;
+		}
+		if(lost) {
+			lost = false;
+			Logger.log(index+' (WebSocket) : Reconnecté',LogType.INFO);
+		}
 		pending = measurement;
 		if(timers.throttle) {return;}
 		const wait = interval - (Date.now() - lastSent);
@@ -599,17 +811,23 @@ function startWebSocket(index) {
 	});
 	api.websocket.on('error', (error) => {
 		Logger.log(index+' (WebSocket) : '+(error.errorCode || error.message || error),LogType.DEBUG);
-		if(error.errorCode == 'user:unauthorized') {
-			Logger.log(index+" : Le token de l'API v2 n'est plus valide (utilisateur supprimé ou équipement réinitialisé), refaites la migration de cet équipement",LogType.ERROR);
-			jsend({eventType: 'tokenInvalid', id: index});
-			removeConnection(index);
-		}
+		if(error.errorCode == 'user:unauthorized' && conn[index] === api) {tokenInvalid(index);}
 	});
 	api.websocket.on('close', () => {
 		if(conn[index] !== api) {return;}
-		// la librairie se reconnecte toute seule et se réabonne
-		Logger.log(index+' (WebSocket) : Connexion perdue, reconnexion automatique...',(received)?LogType.WARNING:LogType.DEBUG);
-		if(received) {jsend({eventType: 'doPing', id: index});}
+		// La librairie se reconnecte toute seule (toutes les 5s) et se réabonne : une coupure courte est normale et reste
+		// silencieuse. Si aucune mesure n'est revenue après webSocketLostDelay, on le signale une seule fois.
+		Logger.log(index+' (WebSocket) : Connexion fermée, reconnexion automatique...',LogType.DEBUG);
+		if(!received || lost || timers.lost) {return;}
+		timers.lost = setTimeout(() => {
+			timers.lost = null;
+			if(conn[index] !== api) {return;}
+			lost = true;
+			// l'avertissement utilisateur est celui du passage hors ligne (setOnline)
+			Logger.log(index+' (WebSocket) : Toujours pas de connexion, nouvelles tentatives en continu...',LogType.DEBUG);
+			// si l'équipement a changé d'IP, sa prochaine annonce mDNS doit être prise en compte
+			if(api.mdns) {discovery.removeCachedResponseByFqdn(api.mdns.fqdn);}
+		}, webSocketLostDelay);
 	});
 	api.websocket.subscribe('measurement');
 	api.websocket.start();
@@ -624,6 +842,9 @@ function startWebSocket(index) {
 }
 
 function discover() {	
+	// toujours repartir d'un mDNS neuf : deux équipements en erreur en même temps relancent chacun la découverte,
+	// sans cet arrêt les sockets et les écouteurs s'accumulaient
+	discovery.stop();
 	discovery.start();
 	
 	discovery.on('response', (mdns) => {
@@ -648,8 +869,20 @@ function discover() {
 			// l'équipement annonce l'API v2 (_homewizard._tcp) : Jeedom peut proposer la migration ou l'autorisation
 			// (envoyé après createEq : l'équipement doit exister dans Jeedom pour le retenir)
 			jsend({eventType: 'v2Available', id: index, mdns: mdns, supported: v2Supported.includes(type)});
-			// en API v1 c'est la réponse _hwenergy._tcp qui gère la connexion
-			if(!useV2(index)) {return;}
+			if(!useV2(index)) {
+				// En API v1 c'est l'annonce _hwenergy._tcp qui gère la connexion. Filet de sécurité : si elle n'arrive pas
+				// (seule l'annonce v2 a été reçue), on tente quand même l'API v1 pour ne pas laisser sans valeurs un équipement
+				// qui fonctionnait en v1.
+				if(!v2Only.includes(type) && !known[index].v1) {
+					setTimeout(() => {
+						if(!conn[index] && !useV2(index) && known[index] && !known[index].v1) {
+							Logger.log(index+" : Pas d'annonce API v1 reçue, tentative en API v1...",LogType.DEBUG);
+							connect(index, type, mdns, true);
+						}
+					}, v1FallbackDelay);
+				}
+				return;
+			}
 		} else if(mdns.txt.api_enabled == 0 && !useV2(index)) {
 			if(libHasV2 && v2Supported.includes(type)) {
 				Logger.log(index+" : API Locale (v1) pas activée dans l'application. Autorisez l'équipement en API v2 avec l'assistant du plugin, ou activez l'API Locale : Icône Engrenage > Mesures > Dispositif > API Locale...",LogType.INFO);
@@ -692,9 +925,31 @@ function discover() {
 }
 
 
+// Commande Online : l'équipement est en ligne tant qu'il a envoyé un message pendant les 3 derniers cycles
+function setOnline(index, online) {
+	if(onlineState[index] === online) {return;}
+	onlineState[index] = online;
+	Logger.log(index+' : '+((online)?'En ligne':'Hors ligne, aucun message depuis '+onlineCycles+' cycles'),(online)?LogType.INFO:LogType.WARNING);
+	jsend({eventType: 'online', id: index, value: (online)?1:0});
+}
+
+setInterval(() => {
+	for(const index in onlineState) {
+		if (!hasOwnProperty.call(onlineState,index) || !onlineState[index]) {continue;}
+		const limit = Math.max(onlineCycles * (conf.pollingIntervals[index.split('_')[0]] || 5000), onlineMinDelay);
+		if(Date.now() - lastSeen[index] <= limit) {continue;}
+		// En WebSocket l'équipement n'envoie que ce qui change : une connexion ouverte et autorisée (vérifiée par un ping
+		// toutes les 30s) compte comme un signe de vie, sinon un équipement dont les valeurs ne bougent pas passerait hors ligne
+		if(conn[index] && conn[index].isV2 && wsTimers[index] && conn[index].websocket.isAuthorized) {continue;}
+		setOnline(index, false);
+	}
+}, 1000);
+
 function eventReceived(who,ev) {
 	const w=who.split('_');
 	if(!conn[who] || !conn[who].mdns) {return;}
+	lastSeen[who] = Date.now();
+	setOnline(who, true);
 	if(conf.logLevel=='debug') {
 		Logger.log("Event reçu de "+conn[who].mdns.txt.product_name+'('+w[1]+') de type '+w[0]+' : '+JSON.stringify(ev),LogType.DEBUG);
 	} else if(conf.logLevel=='info') {
@@ -707,6 +962,13 @@ function eventReceived(who,ev) {
 /** 
 	UTILS
 **/
+// Un démon ne doit pas s'arrêter sur une erreur imprévue d'une librairie ou d'un équipement : on la note et on continue
+process.on('uncaughtException', function(error) {
+	Logger.log("Erreur non gérée : "+(error && error.stack || error),LogType.ERROR);
+});
+process.on('unhandledRejection', function(reason) {
+	Logger.log("Promesse rejetée non gérée : "+(reason && reason.stack || reason),LogType.ERROR);
+});
 process.on('SIGHUP', function() {
 	Logger.log("Recu SIGHUP",LogType.DEBUG);
 	myCommands.stop();

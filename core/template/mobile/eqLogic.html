@@ -1,0 +1,114 @@
+<div class="eqLogic eqLogic-widget hw-widget #eqLogic_class# #class#" data-eqType="#eqType#" data-eqLogic_id="#id#" data-eqLogic_uid="#uid#" data-version="#version#" data-translate-category="#translate_category#" data-category="#category#" data-tags="#tags#" style="width:#width#;height:#height#;#style#">
+	<style>
+		.hw-widget { min-width: 250px; width: 100%; }
+		.hw-widget .hw-body { padding: 4px 10px 8px 10px; text-align: left; }
+		.hw-widget .hw-head { display: flex; align-items: center; gap: 10px; }
+		.hw-widget .hw-img { width: 54px; height: 54px; object-fit: contain; flex: none; }
+		.hw-widget .hw-main { flex: 1; min-width: 0; }
+		.hw-widget .hw-main-value { font-size: 30px; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+		.hw-widget .hw-main-value small { font-size: 14px; font-weight: 400; opacity: .7; }
+		.hw-widget .hw-main-label { font-size: 12px; opacity: .75; }
+		.hw-widget .hw-lbl-export, .hw-widget.hw-export .hw-lbl-import { display: none; }
+		.hw-widget.hw-export .hw-lbl-export { display: inline; }
+		.hw-widget.hw-export .hw-main-value { color: var(--al-success-color, #4caf50); }
+		.hw-widget .hw-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+		.hw-widget .hw-tile { border-radius: 6px; padding: 4px 8px; background: rgba(127,127,127,.12); min-width: 0; }
+		.hw-widget .hw-tile-label { font-size: 11px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.hw-widget .hw-tile-value { font-size: 15px; font-weight: 600; white-space: nowrap; }
+		.hw-widget .hw-tile-value small { font-size: 11px; font-weight: 400; opacity: .7; }
+		.hw-widget .hw-bar { height: 5px; border-radius: 3px; background: rgba(127,127,127,.25); margin-top: 3px; overflow: hidden; }
+		.hw-widget .hw-bar > div { height: 100%; width: 0; background: var(--al-success-color, #4caf50); transition: width .4s; }
+		.hw-widget table.hw-phases { width: 100%; margin-top: 8px; font-size: 12px; border-collapse: collapse; }
+		.hw-widget table.hw-phases td { padding: 2px 4px; text-align: right; white-space: nowrap; background: transparent; border: 0; }
+		.hw-widget table.hw-phases td:first-child { text-align: left; opacity: .7; }
+		.hw-widget table.hw-phases tr + tr td { border-top: 1px solid rgba(127,127,127,.2); }
+		.hw-widget .hw-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 11px; opacity: .8; }
+		.hw-widget .hw-foot .hw-grow { flex: 1; }
+		.hw-widget .hw-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--al-danger-color, #e53935); vertical-align: middle; }
+		.hw-widget .hw-dot.hw-on { background: var(--al-success-color, #4caf50); }
+		.hw-widget .hw-lbl-offline, .hw-widget .hw-offline .hw-lbl-online { display: none; }
+		.hw-widget .hw-offline .hw-lbl-offline { display: inline; }
+		.hw-widget .hw-switch { cursor: pointer; font-size: 26px; opacity: .45; flex: none; }
+		.hw-widget .hw-switch.hw-on { opacity: 1; color: var(--al-success-color, #4caf50); }
+		.hw-widget .hw-actions { margin-top: 8px; text-align: center; }
+		.hw-widget .hw-waiting { margin-top: 8px; font-size: 12px; opacity: .8; }
+	</style>
+	<center class="widget-name">
+		<span class="warning" title="#alert_name#"><i class='#alert_icon#'></i></span>
+		<span class="reportModeVisible">#name_display# <span class="object_name">#object_name#</span></span>
+		<a href="#eqLink#" class="reportModeHidden">#name_display# <span class="object_name">#object_name#</span></a>
+	</center>
+	<div class="hw-body">
+		<div class="hw-head">
+			<img class="hw-img" src="#hw_image#" alt=""/>
+			<div class="hw-main">#hw_main#</div>
+			#hw_switch#
+		</div>
+		#hw_tiles#
+		#hw_phases#
+		#hw_actions#
+		<div class="hw-foot">#hw_foot#</div>
+	</div>
+	<script>
+		(function() {
+			var root = document.querySelector('.eqLogic[data-eqLogic_uid="#uid#"]');
+			if (!root) return;
+			if (typeof jeedom.cmd.addUpdateFunction !== 'function') { // avant 4.3
+				jeedom.cmd.addUpdateFunction = function(id, func) {
+					jeedom.cmd.update[id] = func;
+				};
+			}
+			var format = function(value, decimals) {
+				if (value === '' || value === null || value === undefined) return '—';
+				var number = parseFloat(value);
+				if (isNaN(number)) return value;
+				return number.toLocaleString(undefined, {maximumFractionDigits: decimals});
+			};
+			var apply = function(el, value) {
+				var kind = el.getAttribute('data-hw_kind');
+				var number = parseFloat(value);
+				switch (kind) {
+					case 'online':
+						el.parentNode.classList.toggle('hw-offline', number != 1);
+						el.classList.toggle('hw-on', number == 1);
+						break;
+					case 'switch':
+						el.classList.toggle('hw-on', number == 1);
+						break;
+					case 'bar':
+						el.style.width = Math.max(0, Math.min(100, number || 0)) + '%';
+						break;
+					case 'text':
+						el.textContent = (value === '' || value === null || value === undefined) ? '—' : value;
+						break;
+					case 'power': // négatif = injection : valeur absolue, le libellé et la couleur changent
+						root.classList.toggle('hw-export', number < 0);
+						el.textContent = format(isNaN(number) ? value : Math.abs(number), 0);
+						break;
+					default:
+						el.textContent = format(value, parseInt(el.getAttribute('data-hw_dec')) || 0);
+				}
+			};
+			var byCmd = {};
+			root.querySelectorAll('[data-hw_cmd]').forEach(function(el) {
+				var id = el.getAttribute('data-hw_cmd');
+				(byCmd[id] = byCmd[id] || []).push(el);
+				apply(el, el.getAttribute('data-hw_value'));
+			});
+			Object.keys(byCmd).forEach(function(id) {
+				jeedom.cmd.addUpdateFunction(id, function(_options) {
+					var value = (_options.value !== undefined) ? _options.value : _options.display_value;
+					byCmd[id].forEach(function(el) {
+						apply(el, value);
+					});
+				});
+			});
+			var button = root.querySelector('.hw-switch');
+			if (button) {
+				button.addEventListener('click', function() {
+					jeedom.cmd.execute({id: button.classList.contains('hw-on') ? button.getAttribute('data-hw_off') : button.getAttribute('data-hw_on')});
+				});
+			}
+		})();
+	</script>
+</div>

@@ -31,16 +31,46 @@ class HomeWizard extends eqLogic {
 		return ['resources/node_modules'];
 	}
 
+	/*
+	 * Commande Online : le démon la passe à 0 après 3 cycles sans message de l'équipement et à 1 au message suivant.
+	 * Ici, ce que le démon ne peut pas faire lui-même :
+	 * - démon arrêté : tous les équipements sont hors ligne
+	 * - équipement silencieux qui ne répond plus au ping : hors ligne
+	 * - équipement sans aucun message depuis 5 minutes (jamais revu depuis le démarrage du démon...) : hors ligne
+	 */
 	public static function cron5() {
 		$deamon_info = self::deamon_info();
-		if ($deamon_info['state'] != 'ok') return;
-		$eqLogics = eqLogic::byType('HomeWizard', true);
-		foreach($eqLogics as $HomeWizard) {
-			if ($HomeWizard->getIsEnable() == 0) continue;
-			if ($HomeWizard->pingHost($HomeWizard->getConfiguration('address')) == true) continue;
-			log::add('HomeWizard', 'debug', __("Offline Réseau", __FILE__) .': '. $HomeWizard->getName());
+		if ($deamon_info['state'] != 'ok') {
+			self::setAllOffline();
+			return;
+		}
+		// on laisse au démon le temps de retrouver les équipements après son démarrage
+		if ((time() - cache::byKey('HomeWizard::daemonStart')->getValue(0)) < 300) return;
+		$pollPeriods = config::byKey('pollPeriods', 'HomeWizard', [], true);
+		foreach(eqLogic::byType('HomeWizard', true) as $HomeWizard) {
+			$onlineCmd = $HomeWizard->getCmd(null, 'online');
+			if (!is_object($onlineCmd) || $onlineCmd->execCmd() != 1) continue;
+			$period = intval($pollPeriods[$HomeWizard->getConfiguration('type')] ?? 0);
+			$cycles = max(10, 3 * (($period >= 100) ? $period : 5000) / 1000);
+			$silence = time() - cache::byKey('HomeWizard::lastSeen::'.$HomeWizard->getId())->getValue(0);
+			if ($silence <= $cycles) continue;
+			// silencieux depuis plus de 3 cycles : le ping tranche, sauf au-delà de 5 minutes où le silence suffit
+			if ($silence <= 300 && $HomeWizard->pingHost($HomeWizard->getConfiguration('address')) == true) continue;
+			log::add('HomeWizard', 'debug', __("Hors ligne", __FILE__) .': '. $HomeWizard->getName());
+			$HomeWizard->checkAndUpdateCmd('online', 0);
 		}
 	}
+
+	/* Démon arrêté : plus aucune valeur ne remonte, les équipements sont hors ligne */
+	public static function setAllOffline() {
+		foreach(eqLogic::byType('HomeWizard') as $HomeWizard) {
+			$onlineCmd = $HomeWizard->getCmd(null, 'online');
+			if (is_object($onlineCmd) && $onlineCmd->execCmd() != 0) {
+				$HomeWizard->checkAndUpdateCmd('online', 0);
+			}
+		}
+	}
+
 	public static function getConfigForCommunity()
 	{
 		$update=update::byTypeAndLogicalId('plugin',__CLASS__);
@@ -129,15 +159,35 @@ class HomeWizard extends eqLogic {
 			case 'tokenInvalid':
 				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
 				if (is_object($eqp) && $eqp->getConfiguration('tokenInvalid') != 1) {
-					log::add('HomeWizard', 'error', __("Le token de l'API v2 n'est plus valide, refaites l'autorisation (assistant Migration API v2) de l'équipement", __FILE__).' '.$eqp->getName());
+					// une seule alerte par équipement dans le centre de messages, retirée quand l'autorisation est refaite
+					$alert = __("Jeedom n'est plus autorisé sur l'équipement", __FILE__).' '.$eqp->getHumanName().' : '.__("il ne remonte plus de valeurs. Refaites l'autorisation dans l'assistant Migration API v2 du plugin (un appui sur le bouton de l'équipement).", __FILE__);
+					log::add('HomeWizard', 'warning', $alert);
+					message::add('HomeWizard', $alert, '', 'HomeWizard::tokenInvalid::'.$eqp->getId());
 					$eqp->setConfiguration('tokenInvalid', 1);
 					$eqp->save(true);
+				}
+			break;
+			case 'online':
+				// en ligne = un message reçu pendant les 3 derniers cycles (calculé par le démon)
+				$eqp = eqlogic::byLogicalId($data['id'],'HomeWizard');
+				if (is_object($eqp)) {
+					log::add('HomeWizard', 'debug', (($data['value'] == 1)?__("En ligne", __FILE__):__("Hors ligne", __FILE__)).' : '.$eqp->getName());
+					if ($data['value'] == 1) cache::set('HomeWizard::lastSeen::'.$eqp->getId(), time());
+					$eqp->checkAndUpdateCmd('online', ($data['value'] == 1)?1:0);
 				}
 			break;
 			case 'updateValue':
 				$logical=$data['id'];
 				$eqp = eqlogic::byLogicalId($logical,'HomeWizard');
 				if (is_object($eqp)){
+					cache::set('HomeWizard::lastSeen::'.$eqp->getId(), time());
+					// Un message reçu = en ligne. Le démon n'envoie Online qu'aux changements d'état : si cron5 a passé
+					// l'équipement hors ligne entre-temps (ping sans réponse), c'est ici qu'il revient en ligne.
+					// Pas pendant l'arrêt du démon, ses derniers messages ne doivent pas remettre en ligne.
+					if (cache::byKey('HomeWizard::daemonStopping')->getValue(0) == 0) {
+						$onlineCmd = $eqp->getCmd(null, 'online');
+						if (is_object($onlineCmd) && $onlineCmd->execCmd() != 1) $eqp->checkAndUpdateCmd('online', 1);
+					}
 					$val=$data['value'];
 					log::add('HomeWizard','debug',json_encode($val));
 					$hasNewCmd=false;
@@ -202,9 +252,16 @@ class HomeWizard extends eqLogic {
 									"mobile"=>'line'
 								]
 							];
-							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id') $cmd['subtype']='string';
+							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id' || $key == 'batteries_mode') $cmd['subtype']='string';
 							if($key == 'wifi_strength') $cmd['unite']='%';
-							if($key == 'power_on' || $key == 'switch_lock') $cmd['subtype']='binary';
+							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full' || $key == 'cloud_enabled') $cmd['subtype']='binary';
+							// réglages système : l'état se lit sur les commandes action liées
+							if($key == 'cloud_enabled' || $key == 'status_led_brightness_pct') {
+								$cmd['isVisible']=0;
+								unset($cmd['template']);
+							}
+							$generic=self::genericTypeFor($key);
+							if($generic != '') $cmd['display']['generic_type']=$generic;
 							if($key == 'brightness') {
 								unset($cmd['template']);
 							}
@@ -249,6 +306,12 @@ class HomeWizard extends eqLogic {
 							}
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
+					}
+					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
+					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
+					if(isset($val['cloud_enabled']) || isset($val['status_led_brightness_pct'])) {
+						$eqp->createSystemActions();
+						$eqp->applyGenericTypes();
 					}
 					if($hasNewCmd) $eqp->save();
 				} else {
@@ -428,6 +491,8 @@ class HomeWizard extends eqLogic {
 			throw new Exception(__("Veuillez vérifier la configuration", __FILE__));
 		}
 		log::add('HomeWizard', 'info', __("Lancement du démon", __FILE__).' '.'HomeWizard');
+		cache::set('HomeWizard::daemonStart', time());
+		cache::set('HomeWizard::daemonStopping', 0);
 		$socketport = self::getFreePort();
 		$url  = network::getNetworkAccess('internal').'/core/api/jeeApi.php' ;
 
@@ -467,6 +532,8 @@ class HomeWizard extends eqLogic {
 		$deamon_info = self::deamon_info();
 		if ($deamon_info['state'] == 'ok') {
 			log::add('HomeWizard', 'info', __("Arrêt du démon", __FILE__).' '.'HomeWizard');
+			cache::set('HomeWizard::daemonStopping', 1);
+			self::setAllOffline();
 			$url="http://" . config::byKey('internalAddr') . ":".config::byKey('socketport', 'HomeWizard')."/stop";
 			$request_http = new com_http($url);
 			$request_http->setNoReportError(true);
@@ -573,11 +640,192 @@ class HomeWizard extends eqLogic {
 		return $return;
 	}
 
+	/* Empreinte de la machine, vide si elle n'est pas disponible (certains conteneurs) */
+	public static function v2MachineId() {
+		$id = @file_get_contents('/etc/machine-id');
+		$id = ($id === false) ? '' : trim($id);
+		return ($id == '') ? '' : sha1($id);
+	}
+
+	/*
+	 * Ce Jeedom est-il la copie d'un autre (sauvegarde restaurée sur une autre machine, clone de disque...) ?
+	 * Les autorisations API v2 copiées restent valables sur les deux Jeedom, mais ils portaient le même nom d'utilisateur :
+	 * refaire une autorisation sur l'un aurait invalidé celle de l'autre. On donne donc un nouveau nom à cette copie, on
+	 * marque ses tokens comme partagés (ils ne seront pas supprimés de l'équipement par un retour à l'API v1) et on
+	 * prévient l'utilisateur dans le centre de messages.
+	 */
+	public static function v2CheckClone($fromRestore = false) {
+		$current = self::v2MachineId();
+		$stored = config::byKey('v2MachineId', 'HomeWizard', '');
+		$nbV2 = count(self::v2Devices());
+		if ($current == '') {
+			// impossible de savoir si la machine a changé : on prévient simplement après une restauration
+			if ($fromRestore && $nbV2 > 0) {
+				message::add('HomeWizard', __("Une sauvegarde vient d'être restaurée. Si elle provient d'un autre Jeedom qui reste en service, les deux partagent les mêmes autorisations API v2 sur vos équipements HomeWizard : elles fonctionnent sur les deux, mais refaire une autorisation (ou revenir à l'API v1) sur l'un coupera l'autre. Si c'est le même Jeedom, il n'y a rien à faire.", __FILE__), '', 'HomeWizard::restore');
+			}
+			return false;
+		}
+		if ($stored == $current) return false;
+		config::save('v2MachineId', $current, 'HomeWizard');
+		if ($stored == '') return false; // première exécution
+		log::add('HomeWizard', 'info', __("Ce Jeedom est une copie d'un autre (machine différente) : nouveau nom d'autorisation API v2", __FILE__));
+		config::save('v2UserName', self::v2NewUserName(), 'HomeWizard');
+		foreach(eqLogic::byType('HomeWizard') as $eqp) {
+			if ($eqp->getConfiguration('apiVersion') == 'v2' && $eqp->getConfiguration('token') != '') {
+				$eqp->setConfiguration('tokenShared', 1);
+				$eqp->save(true);
+			}
+		}
+		if ($nbV2 > 0) {
+			message::add('HomeWizard', __("Ce Jeedom est une copie d'un autre Jeedom (sauvegarde restaurée sur une autre machine). Il partage avec lui les autorisations API v2 de vos équipements HomeWizard : tout continue de fonctionner sur les deux. Ce Jeedom a reçu un nouveau nom d'autorisation : refaire une autorisation ici ne coupera plus l'autre Jeedom. Si l'autre Jeedom n'existe plus, il n'y a rien à faire.", __FILE__), '', 'HomeWizard::clone');
+		}
+		return true;
+	}
+
+	/* Appelé par Jeedom après la restauration d'une sauvegarde */
+	public static function restore() {
+		try {
+			self::v2CheckClone(true);
+		} catch (Throwable $e) {
+			log::add('HomeWizard', 'warning', __("Vérification après restauration impossible", __FILE__).' : '.$e->getMessage());
+		}
+	}
+
+	/*
+	 * Nouveau nom d'utilisateur : jeedom-<nom du Jeedom>-<aléatoire>. Le nom du Jeedom permet de reconnaitre qui a créé
+	 * l'utilisateur dans la liste des utilisateurs d'un équipement (l'API ne donne ni IP ni date, seulement ce nom).
+	 * Caractères acceptés par l'API : lettres, chiffres, - et _ (40 caractères maximum après local/).
+	 */
+	public static function v2NewUserName() {
+		$jeedomName = preg_replace('/[^a-zA-Z0-9_-]/', '', str_replace(' ', '-', (string) config::byKey('name')));
+		$jeedomName = trim(substr($jeedomName, 0, 20), '-');
+		return 'jeedom-'.(($jeedomName != '') ? $jeedomName.'-' : '').bin2hex(random_bytes(4));
+	}
+
+	/* Utilisateurs (autorisations) enregistrés sur l'équipement, avec leur origine déduite du nom */
+	public function v2Users() {
+		$result = self::hwExecute('users', ['id'=>$this->getLogicalId()]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		if ($result['result'] != 'ok') {
+			throw new Exception($result['error'] ?? __("Erreur du démon", __FILE__));
+		}
+		return self::v2DescribeUsers($result['users'] ?? []);
+	}
+
+	public function v2DeleteUser($name) {
+		$result = self::hwExecute('userDelete', ['id'=>$this->getLogicalId(), 'name'=>$name]);
+		if (!is_array($result) || !isset($result['result'])) {
+			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
+		}
+		if ($result['result'] != 'ok') {
+			throw new Exception($result['error'] ?? __("Erreur du démon", __FILE__));
+		}
+		return self::v2DescribeUsers($result['users'] ?? []);
+	}
+
+	public static function v2DescribeUsers($users) {
+		$return = [];
+		foreach($users as $user) {
+			$name = $user['name'] ?? '';
+			if (!empty($user['current'])) {
+				$origin = 'current';
+			} elseif (strpos($name, 'cloud/') === 0) {
+				$origin = 'cloud';
+			} elseif (strpos($name, 'local/jeedom') === 0) {
+				$origin = 'jeedom';
+			} else {
+				$origin = 'local';
+			}
+			$return[] = ['name'=>$name, 'origin'=>$origin];
+		}
+		return $return;
+	}
+
+	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
+	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales, la charge de la batterie */
+	public static function genericTypeFor($_logicalId) {
+		$generic = [
+			'active_power_w'=>'POWER', 'power_w'=>'POWER',
+			'total_power_import_kwh'=>'CONSUMPTION', 'energy_import_kwh'=>'CONSUMPTION',
+			'state_of_charge_pct'=>'BATTERY', // charge de la Plug-In Battery : niveau de batterie dans HomeKit
+		];
+		return $generic[$_logicalId] ?? '';
+	}
+
+	/* Une seule fois par équipement : types génériques des commandes créées avant qu'ils existent (sans toucher à ceux déjà choisis) */
+	public function applyGenericTypes() {
+		if ($this->getConfiguration('genericTypes') == 2) return;
+		foreach($this->getCmd('info') as $cmd) {
+			$generic = self::genericTypeFor($cmd->getLogicalId());
+			if ($generic != '' && $cmd->getGeneric_type() == '') {
+				$cmd->setGeneric_type($generic);
+				$cmd->save(true);
+			}
+		}
+		$this->setConfiguration('genericTypes', 2);
+		$this->save(true);
+	}
+
+	/* Identifier et redémarrer : selon le type et l'API de l'équipement */
+	public function canIdentify() {
+		if ($this->getConfiguration('apiVersion') == 'v2') return true;
+		return in_array($this->getConfiguration('type'), ['HWE-P1', 'HWE-SKT']);
+	}
+
+	public function canReboot() {
+		return ($this->getConfiguration('apiVersion') == 'v2' && in_array(self::v2Family($this->getConfiguration('type')), ['p1', 'kwh']));
+	}
+
+	/* Commandes action des réglages système (cloud, led d'état), d'identification et de redémarrage */
+	public function createSystemActions() {
+		$actions = [];
+		$writable = !in_array($this->getConfiguration('type'), self::v2OnlyTypes()); // cloud en lecture seule sur la Plug-In Battery
+		if (is_object($this->getCmd(null, 'cloud_enabled')) && $writable) {
+			$actions[] = ['action_cloud_on', __("Cloud activer", __FILE__), 'other', 'cloud_enabled', null, 1];
+			$actions[] = ['action_cloud_off', __("Cloud désactiver", __FILE__), 'other', 'cloud_enabled', ['actionConfirm'=>1], 1];
+		}
+		if (is_object($this->getCmd(null, 'status_led_brightness_pct'))) {
+			$actions[] = ['action_status_led_brightness', __("Luminosité led", __FILE__), 'slider', 'status_led_brightness_pct', ['minValue'=>0, 'maxValue'=>100], 1];
+		}
+		if ($this->canIdentify()) $actions[] = ['action_identify', __("Identifier", __FILE__), 'other', '', null, 1];
+		if ($this->canReboot()) $actions[] = ['action_reboot', __("Redémarrer", __FILE__), 'other', '', ['actionConfirm'=>1], 0];
+		foreach($actions as $action) {
+			if (is_object($this->getCmd(null, $action[0]))) continue;
+			$cmd = ['logicalId'=>$action[0], 'name'=>$action[1], 'type'=>'action', 'subtype'=>$action[2], 'isVisible'=>$action[5]];
+			if ($action[3] != '') $cmd['value'] = $action[3];
+			if ($action[4]) $cmd['configuration'] = $action[4];
+			if ($action[2] == 'slider') $cmd['unite'] = '%';
+			$this->createCmd($cmd);
+		}
+	}
+
+	public function createBatteriesActions() {
+		if (is_object($this->getCmd(null, 'action_batteries_charge_to_full_off'))) return;
+		$actions = [
+			['action_batteries_mode', __("Batteries mode", __FILE__), 'select', 'batteries_mode', ['listValue'=>'zero|'.__("Zéro (autoconsommation)", __FILE__).';to_full|'.__("Charge complète", __FILE__).';standby|'.__("Veille", __FILE__).';predictive|'.__("Prédictif", __FILE__)]],
+			['action_batteries_charge_on', __("Batteries autoriser la charge", __FILE__), 'other', 'batteries_charge_allowed', null],
+			['action_batteries_charge_off', __("Batteries interdire la charge", __FILE__), 'other', 'batteries_charge_allowed', null],
+			['action_batteries_discharge_on', __("Batteries autoriser la décharge", __FILE__), 'other', 'batteries_discharge_allowed', null],
+			['action_batteries_discharge_off', __("Batteries interdire la décharge", __FILE__), 'other', 'batteries_discharge_allowed', null],
+			['action_batteries_charge_to_full_on', __("Batteries lancer la charge complète", __FILE__), 'other', 'batteries_charge_to_full', null],
+			['action_batteries_charge_to_full_off', __("Batteries arrêter la charge complète", __FILE__), 'other', 'batteries_charge_to_full', null],
+		];
+		foreach($actions as $action) {
+			if (is_object($this->getCmd(null, $action[0]))) continue;
+			$cmd = ['logicalId'=>$action[0], 'name'=>$action[1], 'type'=>'action', 'subtype'=>$action[2], 'value'=>$action[3], 'isVisible'=>1];
+			if ($action[4]) $cmd['configuration'] = $action[4];
+			$this->createCmd($cmd);
+		}
+	}
+
 	/* Nom de l'utilisateur créé sur les équipements. Unique par Jeedom : deux Jeedom avec le même nom s'invalideraient leur token */
 	public static function v2UserName() {
+		self::v2CheckClone();
 		$name = config::byKey('v2UserName', 'HomeWizard', '');
 		if ($name == '') {
-			$name = 'jeedom-'.bin2hex(random_bytes(4));
+			$name = self::v2NewUserName();
 			config::save('v2UserName', $name, 'HomeWizard');
 		}
 		return $name;
@@ -677,6 +925,8 @@ class HomeWizard extends eqLogic {
 	/* L'équipement a des commandes de l'API v1, donc quelque chose à migrer */
 	public function hasV1Cmds() {
 		foreach($this->getCmd() as $cmd) {
+			// active_tariff_txt vient du fichier de config du type, elle existe aussi sur un équipement tout neuf
+			if ($cmd->getLogicalId() == 'active_tariff_txt') continue;
 			if (self::v2LogicalId($cmd->getLogicalId()) != $cmd->getLogicalId()) return true;
 		}
 		return false;
@@ -736,6 +986,8 @@ class HomeWizard extends eqLogic {
 		$this->setConfiguration('token', $token);
 		$this->setConfiguration('v2UserName', $userName);
 		$this->setConfiguration('tokenInvalid', 0);
+		message::removeAll('HomeWizard', 'HomeWizard::tokenInvalid::'.$this->getId());
+		$this->setConfiguration('tokenShared', 0);
 		$this->save(true);
 		$renamed = $this->renameCmdsForApi(true);
 		$this->save(); // postSave : commandes additionnelles avec leur nom API v2
@@ -747,13 +999,16 @@ class HomeWizard extends eqLogic {
 		if (in_array($this->getConfiguration('type'), self::v2OnlyTypes())) {
 			throw new Exception(__("Cet équipement n'existe qu'en API v2", __FILE__));
 		}
-		$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId()]);
+		// token copié d'un autre Jeedom (voir v2CheckClone) : on ne supprime pas l'utilisateur sur l'équipement, l'autre s'en sert
+		$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId(), 'keepUser'=>($this->getConfiguration('tokenShared') == 1)?1:0]);
 		if (!is_array($result) || !isset($result['result'])) {
 			throw new Exception(__("Pas de réponse du démon HomeWizard, consultez le log HomeWizard", __FILE__));
 		}
 		$this->setConfiguration('apiVersion', 'v1');
 		$this->setConfiguration('token', '');
 		$this->setConfiguration('tokenInvalid', 0);
+		message::removeAll('HomeWizard', 'HomeWizard::tokenInvalid::'.$this->getId());
+		$this->setConfiguration('tokenShared', 0);
 		$this->save(true);
 		$renamed = $this->renameCmdsForApi(false);
 		$this->save();
@@ -879,25 +1134,14 @@ class HomeWizard extends eqLogic {
 		}
 	}
 	
+	/* Test réseau, utilisé par cron5 pour trancher quand un équipement est silencieux */
 	public function pingHost($host, $timeout = null) {
 		$timeoutValue="";
 		if($timeout) {
 			$timeoutValue=" timeout -s 9 --preserve-status --foreground ".$timeout."s ";
 		}
 		exec(system::getCmdSudo(). $timeoutValue . "ping -c1 " . $host, $output, $return_var);
-		$onlineCmd = $this->getCmd(null, 'online');
-		if ($return_var == 0) {
-			$result = true;
-			if (is_object($onlineCmd)) {
-				$this->checkAndUpdateCmd('online', 1);
-			}
-		} else {
-			$result = false;
-			if (is_object($onlineCmd)) {
-				$this->checkAndUpdateCmd('online', 0);
-			}
-		}
-		return $result;
+		return ($return_var == 0);
 	}	
 	
 	public function getImage(){
@@ -909,6 +1153,112 @@ class HomeWizard extends eqLogic {
 		else return 'plugins/HomeWizard/plugin_info/HomeWizard_icon.png';
 	}
 	
+	/* Widget du plugin : la mesure principale, les totaux, les phases, l'état, puis les commandes action visibles */
+	public function toHtml($_version = 'dashboard') {
+		$replace = $this->preToHtml($_version);
+		if (!is_array($replace)) return $replace;
+		$version = jeedom::versionAlias($_version);
+		$cmds = [];
+		foreach($this->getCmd('info') as $cmd) $cmds[$cmd->getLogicalId()] = $cmd;
+		// première commande existante parmi les noms API v2 puis v1
+		$find = function($ids) use ($cmds) {
+			foreach((array)$ids as $id) {
+				if (isset($cmds[$id])) return $cmds[$id];
+			}
+			return null;
+		};
+		$span = function($cmd, $kind = 'number', $decimals = 0) {
+			$history = ($cmd->getIsHistorized() == 1)?' history cursor':'';
+			return '<span class="hw-value'.$history.'" data-cmd_id="'.$cmd->getId().'" data-hw_cmd="'.$cmd->getId().'" data-hw_kind="'.$kind.'" data-hw_dec="'.$decimals.'" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></span>';
+		};
+		$tile = function($label, $content) {
+			return '<div class="hw-tile"><div class="hw-tile-label">'.$label.'</div><div class="hw-tile-value">'.$content.'</div></div>';
+		};
+		$family = self::v2Family($this->getConfiguration('type'));
+
+		// mesure principale
+		$main = '';
+		$power = $find(['power_w', 'active_power_w']);
+		$water = $find('active_liter_lpm');
+		if (is_object($power)) {
+			$signed = in_array($family, ['p1', 'kwh']); // compteurs : négatif = injection
+			$main = '<div class="hw-main-value">'.$span($power, $signed?'power':'number').' <small>W</small></div>';
+			$main .= '<div class="hw-main-label">'.($signed?'<span class="hw-lbl-import">'.__("Soutirage", __FILE__).'</span><span class="hw-lbl-export">'.__("Injection", __FILE__).'</span>':__("Puissance", __FILE__)).'</div>';
+		} elseif (is_object($water)) {
+			$main = '<div class="hw-main-value">'.$span($water, 'number', 1).' <small>L/min</small></div><div class="hw-main-label">'.__("Débit", __FILE__).'</div>';
+		} else {
+			$main = '<div class="hw-main-label">'.__("En attente de valeurs", __FILE__).'</div>';
+		}
+
+		// prise : bouton marche/arrêt
+		$switch = '';
+		$state = $find('power_on');
+		$on = $this->getCmd('action', 'action_power_on');
+		$off = $this->getCmd('action', 'action_power_off');
+		if (is_object($state) && is_object($on) && is_object($off)) {
+			$switch = '<i class="fas fa-power-off hw-switch" data-hw_cmd="'.$state->getId().'" data-hw_kind="switch" data-hw_value="'.htmlspecialchars((string)$state->execCmd(), ENT_QUOTES, 'UTF-8').'" data-hw_on="'.$on->getId().'" data-hw_off="'.$off->getId().'" title="'.__("Allumer / Eteindre", __FILE__).'"></i>';
+		}
+
+		// tuiles
+		$tiles = '';
+		$cmd = $find('state_of_charge_pct');
+		if (is_object($cmd)) $tiles .= $tile(__("Charge", __FILE__), $span($cmd).' <small>%</small><div class="hw-bar"><div data-hw_cmd="'.$cmd->getId().'" data-hw_kind="bar" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></div></div>');
+		$cmd = $find('cycles');
+		if (is_object($cmd)) $tiles .= $tile(__("Cycles", __FILE__), $span($cmd));
+		$cmd = $find(['energy_import_kwh', 'total_power_import_kwh']);
+		if (is_object($cmd)) $tiles .= $tile(($family == 'bat')?__("Energie chargée", __FILE__):__("Import", __FILE__), $span($cmd, 'number', 1).' <small>kWh</small>');
+		$cmd = $find(['energy_export_kwh', 'total_power_export_kwh']);
+		if (is_object($cmd)) $tiles .= $tile(($family == 'bat')?__("Energie restituée", __FILE__):__("Export", __FILE__), $span($cmd, 'number', 1).' <small>kWh</small>');
+		$cmd = $find('total_gas_m3');
+		if (is_object($cmd)) $tiles .= $tile(__("Gaz", __FILE__), $span($cmd, 'number', 2).' <small>m³</small>');
+		$cmd = $find('total_liter_m3');
+		if (is_object($cmd)) $tiles .= $tile(__("Eau", __FILE__), $span($cmd, 'number', 3).' <small>m³</small>');
+		$cmd = $find(['tariff_txt', 'active_tariff_txt']);
+		if (is_object($cmd) && is_object($find(['tariff', 'active_tariff']))) $tiles .= $tile(__("Tarif", __FILE__), $span($cmd, 'text'));
+		$cmd = $find(['batteries_mode']);
+		if (is_object($cmd)) $tiles .= $tile(__("Batteries", __FILE__), $span($cmd, 'text'));
+		if ($tiles != '') $tiles = '<div class="hw-tiles">'.$tiles.'</div>';
+
+		// phases (seulement s'il y en a plusieurs)
+		$phases = '';
+		if (is_object($find(['power_l2_w', 'active_power_l2_w']))) {
+			foreach([1, 2, 3] as $phase) {
+				$row = '';
+				foreach([[['voltage_l'.$phase.'_v', 'active_voltage_l'.$phase.'_v'], 'V', 0], [['current_l'.$phase.'_a', 'active_current_l'.$phase.'_a'], 'A', 1], [['power_l'.$phase.'_w', 'active_power_l'.$phase.'_w'], 'W', 0]] as $col) {
+					$cmd = $find($col[0]);
+					$row .= '<td>'.(is_object($cmd)?$span($cmd, 'number', $col[2]).' '.$col[1]:'').'</td>';
+				}
+				$phases .= '<tr><td>L'.$phase.'</td>'.$row.'</tr>';
+			}
+			$phases = '<table class="hw-phases">'.$phases.'</table>';
+		}
+
+		// pied : en ligne, wifi, API
+		$foot = '';
+		$cmd = $find('online');
+		if (is_object($cmd)) $foot .= '<span><span class="hw-dot" data-hw_cmd="'.$cmd->getId().'" data-hw_kind="online" data-hw_value="'.htmlspecialchars((string)$cmd->execCmd(), ENT_QUOTES, 'UTF-8').'"></span> <span class="hw-lbl-online">'.__("En ligne", __FILE__).'</span><span class="hw-lbl-offline">'.__("Hors ligne", __FILE__).'</span></span>';
+		$cmd = $find('wifi_strength');
+		if (is_object($cmd)) $foot .= '<span><i class="fas fa-wifi"></i> '.$span($cmd).' %</span>';
+		$foot .= '<span class="hw-grow"></span><span>API '.(($this->getConfiguration('apiVersion') == 'v2')?'v2':'v1').'</span>';
+
+		$replace['#hw_image#'] = $this->getImage();
+		$replace['#hw_main#'] = $main;
+		$replace['#hw_switch#'] = $switch;
+		$replace['#hw_tiles#'] = $tiles;
+		$replace['#hw_phases#'] = $phases;
+		// les autres commandes action visibles (réglages, identifier, batteries...) gardent leur widget Jeedom
+		$actions = '';
+		foreach($this->getCmd('action', null, true) as $cmd) {
+			if (in_array($cmd->getLogicalId(), ['action_power_on', 'action_power_off']) && $switch != '') continue;
+			$actions .= $cmd->toHtml($_version, '');
+		}
+		if ($actions != '') $actions = '<div class="hw-actions">'.$actions.'</div>';
+
+		$replace['#hw_actions#'] = $actions;
+		$replace['#hw_foot#'] = $foot;
+		return $this->postToHtml($_version, template_replace($replace, getTemplate('core', $version, 'eqLogic', 'HomeWizard')));
+	}
+
 	public function createCmd($cmd) {
 		$changed=false;
 		$order=intval($this->getConfiguration('orderCmd',1));
@@ -956,6 +1306,10 @@ class HomeWizard extends eqLogic {
 		} 
 		if(isset($cmd['display'])) {
 			foreach($cmd['display'] as $display_type=>$display_value) {
+				if($display_type == 'generic_type' && method_exists($newCmd, 'setGeneric_type')) {
+					$newCmd->setGeneric_type($display_value);
+					continue;
+				}
 				$newCmd->setDisplay($display_type, $display_value);
 			}
 		}
@@ -984,6 +1338,29 @@ class HomeWizard extends eqLogic {
 		return false;
 	}	
 
+	/* Suppression de l'équipement : on retire aussi l'autorisation de Jeedom sur l'équipement HomeWizard */
+	public function preRemove() {
+		if ($this->getConfiguration('apiVersion') != 'v2' || $this->getConfiguration('token') == '') return;
+		try {
+			if (self::deamon_info()['state'] != 'ok') {
+				log::add('HomeWizard', 'warning', __("Démon arrêté : l'autorisation API v2 n'a pas pu être retirée de l'équipement", __FILE__).' '.$this->getName());
+				return;
+			}
+			// token copié d'un autre Jeedom : l'autre s'en sert encore, on le laisse sur l'équipement
+			$keepUser = ($this->getConfiguration('tokenShared') == 1)?1:0;
+			$result = self::hwExecute('unpair', ['id'=>$this->getLogicalId(), 'keepUser'=>$keepUser, 'forget'=>1]);
+			if ($keepUser) {
+				log::add('HomeWizard', 'info', __("Autorisation API v2 partagée avec un autre Jeedom, laissée sur l'équipement", __FILE__).' '.$this->getName());
+			} elseif (is_array($result) && !empty($result['userDeleted'])) {
+				log::add('HomeWizard', 'info', __("Autorisation API v2 retirée de l'équipement", __FILE__).' '.$this->getName());
+			} else {
+				log::add('HomeWizard', 'warning', __("L'autorisation API v2 n'a pas pu être retirée de l'équipement (injoignable ?)", __FILE__).' '.$this->getName());
+			}
+		} catch (Throwable $e) {
+			log::add('HomeWizard', 'warning', __("L'autorisation API v2 n'a pas pu être retirée de l'équipement", __FILE__).' '.$this->getName().' : '.$e->getMessage());
+		}
+	}
+
 	public function postSave() {
 		$online=$this->getCmd(null, 'online');
 		if(!is_object($online)) {
@@ -1001,8 +1378,6 @@ class HomeWizard extends eqLogic {
 			];
 			$this->createCmd($cmd);	
 		}
-		$this->pingHost($this->getConfiguration('address'));
-
 		$type = $this->getConfiguration('type');
 		$eqConfig = 'plugins/HomeWizard/core/config/'.$type.'.json';
 		$base = dirname(__FILE__) . '/../../../../';
@@ -1103,6 +1478,46 @@ class HomeWizardCmd extends cmd {
 				$result = HomeWizard::hwExecute('cmd',['cmd'=>'identify','id'=>$eqLogical]);
 				if($result['result']==='ko') {
 					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result['error']))?$result['error']['response']:$result['error']));
+					return false;
+				}
+			break;
+			case 'action_reboot':
+			case 'action_cloud_on':
+			case 'action_cloud_off':
+			case 'action_status_led_brightness':
+				// réglages système de l'équipement
+				if ($logical == 'action_reboot') {
+					$request = ['cmd'=>'reboot', 'id'=>$eqLogical];
+				} elseif ($logical == 'action_status_led_brightness') {
+					$request = ['cmd'=>'led', 'id'=>$eqLogical, 'val'=>intval($_options['slider'] ?? 0)];
+				} else {
+					$request = ['cmd'=>'cloud', 'id'=>$eqLogical, 'val'=>($logical == 'action_cloud_on')?1:0];
+				}
+				$result = HomeWizard::hwExecute('cmd',$request);
+				if(!is_array($result) || $result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result) && isset($result['error']))?json_encode($result['error']):''));
+					return false;
+				}
+			break;
+			case 'action_batteries_mode':
+			case 'action_batteries_charge_on':
+			case 'action_batteries_charge_off':
+			case 'action_batteries_discharge_on':
+			case 'action_batteries_discharge_off':
+			case 'action_batteries_charge_to_full_on':
+			case 'action_batteries_charge_to_full_off':
+				// groupe de Plug-In Batteries piloté par ce compteur
+				$on = (substr($logical, -3) == '_on')?1:0;
+				if ($logical == 'action_batteries_mode') {
+					$request = ['cmd'=>'batteries_mode', 'id'=>$eqLogical, 'val'=>$_options['select'] ?? ''];
+				} elseif (strpos($logical, 'action_batteries_charge_to_full') === 0) {
+					$request = ['cmd'=>'batteries_charge_to_full', 'id'=>$eqLogical, 'val'=>$on];
+				} else {
+					$request = ['cmd'=>'batteries_permission', 'id'=>$eqLogical, 'val'=>(strpos($logical, '_discharge_') !== false)?'discharge_allowed':'charge_allowed', 'state'=>$on];
+				}
+				$result = HomeWizard::hwExecute('cmd',$request);
+				if(!is_array($result) || $result['result']==='ko') {
+					log::add('HomeWizard','info',__("Résultat de la commande KO", __FILE__).': '.((is_array($result) && isset($result['error']))?json_encode($result['error']):''));
 					return false;
 				}
 			break;
