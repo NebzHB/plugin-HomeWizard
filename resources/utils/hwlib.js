@@ -219,36 +219,14 @@ function newDevice(type, ip, apiVersion, param) {
 /* Découverte mDNS : _hwenergy._tcp (API v1) et _homewizard._tcp (API v2), un seul flux de réponses pour le démon */
 const MdnsDiscovery = Object.getPrototypeOf(V1.HomeWizardEnergyDiscovery);
 
-function txtFor(serviceType, response) {
-	// Un équipement peut répondre pour ses deux services dans le même paquet : on prend le TXT du service écouté
-	const records = [].concat(response.answers || [], response.additionals || []);
-	const txt = records.find((r) => r.type == 'TXT' && typeof r.name == 'string' && r.name.includes('_' + serviceType + '._tcp')) ||
-		records.find((r) => r.type == 'TXT');
-	if (!txt || !Array.isArray(txt.data) || !txt.data.every(Buffer.isBuffer)) {return null;}
-	const out = Object.create(null);
-	for (const buffer of txt.data) {
-		const entry = buffer.toString();
-		const i = entry.indexOf('=');
-		const key = (i == -1) ? entry : entry.slice(0, i);
-		if (key && key != '__proto__') {out[key] = (i == -1) ? undefined : entry.slice(i + 1);}
-	}
-	return out;
-}
-
-function serviceDiscovery(Base, serviceType) {
-	return class extends Base {
-		getTxtRecordFromResponse(response) {
-			return txtFor(serviceType, response);
-		}
-	};
-}
-const V1Discovery = serviceDiscovery(V1.HomeWizardEnergyDiscovery, 'hwenergy');
-class V2DiscoveryBase extends MdnsDiscovery {
+// Depuis la 3.0.1, la librairie lit le TXT du service annoncé quand un équipement annonce ses deux services dans le
+// même paquet (et depuis la 3.0.2 elle associe les enregistrements par leur nom exact).
+const V1Discovery = V1.HomeWizardEnergyDiscovery;
+class V2Discovery extends MdnsDiscovery {
 	constructor() {
 		super('homewizard');
 	}
 }
-const V2Discovery = serviceDiscovery(V2DiscoveryBase, 'homewizard');
 
 class Discovery {
 	constructor() {

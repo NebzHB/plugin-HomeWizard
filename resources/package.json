@@ -21,7 +21,7 @@
     "HomeWizard"
   ],
   "dependencies": {
-	"homewizard-energy-api": ">=3.0.0 <4",
+	"homewizard-energy-api": ">=3.0.2 <4",
 	"express": ">=5.3.0",
 	"axios": ">=1.21.1"
   },
