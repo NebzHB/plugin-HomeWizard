@@ -254,6 +254,14 @@ class HomeWizard extends eqLogic {
 							];
 							if($key == 'unique_id' || $key == 'wifi_ssid' || $key == 'meter_model' || $key == 'montly_power_peak_timestamp' || $key == 'monthly_power_peak_timestamp' || $key == 'gas_unique_id' || $key == 'batteries_mode') $cmd['subtype']='string';
 							if($key == 'wifi_strength') $cmd['unite']='%';
+							// temps de fonctionnement : historisé pour voir les redémarrages (retour à zéro), pas affiché
+							if($key == 'uptime_s') {
+								$cmd['name']=__("Temps de fonctionnement", __FILE__);
+								$cmd['unite']='s';
+								$cmd['isVisible']=0;
+								$cmd['isHistorized']=1;
+								unset($cmd['template']);
+							}
 							if($key == 'power_on' || $key == 'switch_lock' || $key == 'batteries_charge_allowed' || $key == 'batteries_discharge_allowed' || $key == 'batteries_charge_to_full' || $key == 'cloud_enabled' || $key == 'api_v1_enabled') $cmd['subtype']='binary';
 							// réglages système : l'état se lit sur les commandes action liées
 							if($key == 'cloud_enabled' || $key == 'status_led_brightness_pct' || $key == 'api_v1_enabled') {
