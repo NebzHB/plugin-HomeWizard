@@ -535,12 +535,22 @@ function removeConnection(index) {
 }
 
 // réglages système remontés à Jeedom (uniquement ceux que l'équipement donne)
+const lastUptime = {};
 function systemEvent(index, system) {
 	if(!system || typeof system != 'object') {return;}
 	const ev = {};
 	if(typeof system.cloud_enabled == 'boolean') {ev.cloud_enabled = system.cloud_enabled?1:0;}
 	if(typeof system.status_led_brightness_pct == 'number') {ev.status_led_brightness_pct = system.status_led_brightness_pct;}
 	if(typeof system.api_v1_enabled == 'boolean') {ev.api_v1_enabled = system.api_v1_enabled?1:0;}
+	if(typeof system.uptime_s == 'number') {
+		// temps de fonctionnement (API v2) : s'il retombe, l'équipement a redémarré (et non une simple coupure réseau)
+		ev.uptime_s = system.uptime_s;
+		// gardé hors de conn[] : la connexion peut être recréée après une coupure, la valeur précédente doit rester
+		if(typeof lastUptime[index] == 'number' && system.uptime_s < lastUptime[index]) {
+			Logger.log(index+" : L'équipement a redémarré il y a "+system.uptime_s+"s (il fonctionnait depuis "+lastUptime[index]+"s au relevé précédent)",LogType.WARNING);
+		}
+		lastUptime[index] = system.uptime_s;
+	}
 	if(conn[index] && conn[index].isV2) {
 		// API v2 : le wifi n'est plus dans les mesures mais dans /api/system
 		const rssi = system.wifi_rssi_db;
