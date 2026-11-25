@@ -315,6 +315,26 @@ class HomeWizard extends eqLogic {
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
+					// date du dernier démarrage, déduite du temps de fonctionnement : elle ne change qu'au redémarrage de
+					// l'équipement, un scénario peut donc se déclencher dessus (historisée : la liste des redémarrages)
+					if(isset($val['uptime_s']) && is_numeric($val['uptime_s'])) {
+						$bootCmd = $eqp->getCmd('info', 'boot_date');
+						if(!is_object($bootCmd)) {
+							$hasNewCmd = $eqp->createCmd([
+								'name'=>__("Dernier démarrage", __FILE__),
+								'logicalId'=>'boot_date',
+								'type'=>'info',
+								'subtype'=>'string',
+								'isVisible'=>1,
+								'isHistorized'=>1,
+								'display'=>['forceReturnLineBefore'=>1],
+								'template'=>['dashboard'=>'line', 'mobile'=>'line']
+							]) || $hasNewCmd;
+							$bootCmd = $eqp->getCmd('info', 'boot_date');
+						}
+						$boot = self::bootDate($val['uptime_s'], is_object($bootCmd) ? $bootCmd->execCmd() : '');
+						if($boot !== null) $eqp->checkAndUpdateCmd('boot_date', $boot);
+					}
 					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
 					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
 					if(isset($val['cloud_enabled']) || isset($val['status_led_brightness_pct']) || isset($val['api_v1_enabled'])) {
@@ -782,6 +802,15 @@ class HomeWizard extends eqLogic {
 	}
 
 	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
+	/* Date de démarrage (Y-m-d H:i:s) depuis le temps de fonctionnement. null si elle ne change pas : le relevé dérive
+	   de quelques secondes (latence, arrondi), seul un écart de plus de 30 s est un vrai redémarrage */
+	public static function bootDate($_uptime, $_previous = '', $_now = null) {
+		$boot = (($_now === null) ? time() : $_now) - max(0, intval($_uptime));
+		$previous = ($_previous == '') ? false : strtotime($_previous);
+		if ($previous !== false && abs($boot - $previous) <= 30) return null;
+		return date('Y-m-d H:i:s', $boot);
+	}
+
 	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales, la charge de la batterie */
 	public static function genericTypeFor($_logicalId) {
 		$generic = [
