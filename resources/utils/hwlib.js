@@ -177,7 +177,11 @@ class V2Device {
 
 	async close() {
 		this.poller.stop();
+		const hadSocket = Boolean(this.websocket.socket);
 		this.websocket.stop();
+		// la librairie envoie la fermeture du WebSocket sans l'attendre : on laisse une seconde à l'équipement pour la
+		// terminer avant de fermer les connexions HTTPS (et, à l'arrêt du démon, avant que le processus se termine)
+		if (hadSocket) {await new Promise((resolve) => setTimeout(resolve, 1000));}
 		await this.device.close();
 	}
 }
