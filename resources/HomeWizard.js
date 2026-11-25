@@ -105,17 +105,22 @@ myCommands.stop = function(req, res) {
 	for(const p in pairings) {
 		if (hasOwnProperty.call(pairings,p)) {pairings[p].abort();}
 	}
+	const closing = [];
 	for(const c in conn) {
 		if (hasOwnProperty.call(conn,c)) {
 			if(conn[c].isPolling.getData) {conn[c].polling.getData.stop();}
 			if(systemIntervals[c]) {clearInterval(systemIntervals[c]);}
-			if(typeof conn[c].close == 'function') {conn[c].close().catch(() => {});}
+			if(typeof conn[c].close == 'function') {closing.push(conn[c].close().catch(() => {}));}
 		}
 	}
 	if(res) {res.json({'result':'ok'});}
-	server.close(() => {
-		Logger.log("Exit",LogType.INFO);
-		process.exit(0);
+	// On laisse aux connexions le temps de se fermer proprement (WebSocket, HTTPS) avant de quitter : l'équipement
+	// libère alors ses connexions tout de suite au lieu d'attendre qu'elles expirent pendant que le démon se relance
+	Promise.race([Promise.allSettled(closing), new Promise((resolve) => setTimeout(resolve, 2000))]).then(() => {
+		server.close(() => {
+			Logger.log("Exit",LogType.INFO);
+			process.exit(0);
+		});
 	});
 };
 
@@ -536,6 +541,8 @@ function removeConnection(index) {
 
 // réglages système remontés à Jeedom (uniquement ceux que l'équipement donne)
 const lastUptime = {};
+// délai entre les connexions ouvertes au démarrage d'un équipement en API v2 (WebSocket, réglages système, batteries)
+const v2StartStep = 3000;
 function systemEvent(index, system) {
 	if(!system || typeof system != 'object') {return;}
 	const ev = {};
@@ -712,11 +719,17 @@ async function doConnect(index, type, mdns, quiet) {
 	jsend({eventType: 'createEq', id: index, mdns: mdns});
 
 	if(conn[index].isV2) {
-		startSystemInterval(index);
-		// /api/batteries n'existe qu'à partir de l'API 2.1.0 (avant : 404)
-		if(batteriesTypes.includes(type) && apiVersionAtLeast(basic.api_version, '2.1.0')) {startBatteriesInterval(index);}
 		// API v2 : l'équipement pousse ses mesures par WebSocket, plus besoin de l'interroger
 		startWebSocket(index);
+		// Une connexion chiffrée à la fois : chaque connexion HTTPS coûte de la mémoire au module (ESP32) et plusieurs
+		// ouvertes d'un coup au démarrage du démon ont fait redémarrer un P1. Réglages système puis batteries, décalés.
+		const api = conn[index];
+		const later = (delay, start) => setTimeout(() => {
+			if(conn[index] === api) {start();}
+		}, delay);
+		later(v2StartStep, () => startSystemInterval(index));
+		// /api/batteries n'existe qu'à partir de l'API 2.1.0 (avant : 404)
+		if(batteriesTypes.includes(type) && apiVersionAtLeast(basic.api_version, '2.1.0')) {later(2 * v2StartStep, () => startBatteriesInterval(index));}
 	} else {
 		// API v1 : /api/v1/system ne donne que le réglage du cloud
 		startSystemInterval(index);
