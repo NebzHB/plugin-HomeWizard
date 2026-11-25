@@ -315,6 +315,22 @@ class HomeWizard extends eqLogic {
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
+					// temps de fonctionnement lisible (2j 14h 25min 06s) à côté de la valeur en secondes, qui reste pour l'historique
+					if(isset($val['uptime_s']) && is_numeric($val['uptime_s'])) {
+						if(!is_object($eqp->getCmd('info', 'uptime_txt'))) {
+							$hasNewCmd = $eqp->createCmd([
+								'name'=>__("Temps de fonctionnement (Texte)", __FILE__),
+								'logicalId'=>'uptime_txt',
+								'type'=>'info',
+								'subtype'=>'string',
+								'isVisible'=>1,
+								'isHistorized'=>0,
+								'display'=>['forceReturnLineBefore'=>1],
+								'template'=>['dashboard'=>'line', 'mobile'=>'line']
+							]) || $hasNewCmd;
+						}
+						$eqp->checkAndUpdateCmd('uptime_txt', self::formatDuration($val['uptime_s']));
+					}
 					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
 					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
 					if(isset($val['cloud_enabled']) || isset($val['status_led_brightness_pct']) || isset($val['api_v1_enabled'])) {
@@ -782,6 +798,14 @@ class HomeWizard extends eqLogic {
 	}
 
 	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
+	/* Durée en secondes vers « 2j 14h 25min 06s » (les jours seulement s'il y en a) */
+	public static function formatDuration($_seconds) {
+		$seconds = max(0, intval($_seconds));
+		$days = intdiv($seconds, 86400);
+		$text = sprintf('%dh %02dmin %02ds', intdiv($seconds % 86400, 3600), intdiv($seconds % 3600, 60), $seconds % 60);
+		return ($days > 0) ? $days.__("j", __FILE__).' '.$text : $text;
+	}
+
 	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales, la charge de la batterie */
 	public static function genericTypeFor($_logicalId) {
 		$generic = [
