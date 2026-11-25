@@ -38,6 +38,34 @@ try {
 		$level=log::convertLogLevel((init('level')==='default')?log::getConfig('log::level'):init('level'));
 		HomeWizard::hwConfig('sendLoglevel',["value"=>$level]);
 		ajax::success();
+	} elseif (in_array(init('action'), ['startPairing', 'cancelPairing', 'revertToV1', 'listUsers', 'deleteUser', 'setApiV1'])) {
+		$daemonState=HomeWizard::deamon_info();
+		if($daemonState['state'] != 'ok') {
+			ajax::error(__("Le démon n'est pas démarré", __FILE__));
+		}
+		$eqLogic = HomeWizard::byId(init('id'));
+		if (!is_object($eqLogic) || $eqLogic->getEqType_name() != 'HomeWizard') {
+			throw new Exception(__("Équipement introuvable : ", __FILE__).init('id'));
+		}
+		if (init('action') == 'startPairing') {
+			log::add('HomeWizard','info',__("Demande de migration vers l'API v2 : ", __FILE__).$eqLogic->getHumanName());
+			ajax::success($eqLogic->startPairing());
+		} elseif (init('action') == 'listUsers') {
+			ajax::success($eqLogic->v2Users());
+		} elseif (init('action') == 'deleteUser') {
+			log::add('HomeWizard','info',__("Suppression de l'utilisateur", __FILE__).' '.init('name').' : '.$eqLogic->getHumanName());
+			ajax::success($eqLogic->v2DeleteUser(init('name')));
+		} elseif (init('action') == 'setApiV1') {
+			ajax::success($eqLogic->setApiV1(init('enable') == 1));
+		} elseif (init('action') == 'cancelPairing') {
+			log::add('HomeWizard','info',__("Annulation de la migration vers l'API v2 : ", __FILE__).$eqLogic->getHumanName());
+			ajax::success($eqLogic->cancelPairing());
+		} else {
+			log::add('HomeWizard','info',__("Demande de retour à l'API v1 : ", __FILE__).$eqLogic->getHumanName());
+			ajax::success($eqLogic->revertToV1());
+		}
+	} elseif (init('action') == 'migrationList') {
+		ajax::success(HomeWizard::migrationList());
 	} 
 	
 	
