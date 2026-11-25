@@ -658,10 +658,17 @@ function apiVersionAtLeast(version, minimum) {
 }
 
 // Ne doit jamais rejeter : appelée sans await depuis les événements (découverte, appairage...)
+// Une seule connexion en cours par équipement : l'annonce v1 et l'annonce v2 (et leurs répétitions) arrivent presque
+// ensemble, chacune lançait sa propre lecture de l'équipement en parallèle
+const connecting = {};
 function connect(index, type, mdns, quiet) {
-	return doConnect(index, type, mdns, quiet).catch((error) => {
+	if(connecting[index]) {return connecting[index];}
+	connecting[index] = doConnect(index, type, mdns, quiet).catch((error) => {
 		Logger.log(index+' (connect) : '+(error && error.stack || error),LogType.ERROR);
+	}).finally(() => {
+		delete connecting[index];
 	});
+	return connecting[index];
 }
 
 function tokenInvalid(index) {
@@ -677,6 +684,13 @@ async function doConnect(index, type, mdns, quiet) {
 	if(conn[index] && conn[index].mdns && conn[index].mdns.ip != mdns.ip) {
 		Logger.log("Changement d'IP de "+conn[index].mdns.ip+" à "+mdns.ip,LogType.DEBUG);
 		removeConnection(index);
+	}
+	// Déjà connecté à cette adresse : une nouvelle annonce mDNS ne doit pas relire l'équipement (chaque lecture est une
+	// connexion chiffrée de plus en API v2), on met seulement Jeedom à jour
+	if(conn[index] && conn[index].mdns && conn[index].isV2 === v2) {
+		if(mdns.firmware_version === undefined) {mdns.firmware_version = conn[index].mdns.firmware_version;}
+		jsend({eventType: 'createEq', id: index, mdns: mdns});
+		return;
 	}
 	if(!conn[index]) {
 		Logger.log("Connexion à : "+mdns.ip+" (API "+((v2)?'v2':'v1')+")",LogType.DEBUG);
