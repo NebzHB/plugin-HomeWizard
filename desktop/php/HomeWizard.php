@@ -154,6 +154,12 @@ $eqLogics = eqLogic::byType('HomeWizard');
 										<span class="eqLogicAttr label label-default" data-l1key="configuration" data-l2key="hostname"></span>
 									</div>
 								</div>
+								<div class="form-group" id="div_hwBatteryBeta" style="display:none;">
+									<div class="col-sm-offset-3 col-sm-9">
+										<span class="label label-warning">beta</span>
+										{{Le support de la Plug-In Battery et le pilotage des batteries sont encore en beta : pas encore testés sur une vraie batterie. Vos retours sont les bienvenus.}}
+									</div>
+								</div>
 								<div class="form-group">
 									<label class="col-sm-3 control-label">{{API utilisée}}</label>
 									<div class="col-sm-9">

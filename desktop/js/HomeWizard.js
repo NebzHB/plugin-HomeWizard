@@ -61,6 +61,9 @@ function printEqLogic(_eqLogic) {
         info = "{{L'équipement n'annonce pas l'API v2 : mettez son firmware à jour}}";
     }
     $('#span_apiInfo').text(info);
+    // Plug-In Battery, ou compteur qui pilote un groupe de batteries : fonctions encore en beta
+    var batteries = v2Only || (_eqLogic.cmd || []).some(function(cmd) { return cmd.logicalId == 'batteries_mode'; });
+    $('#div_hwBatteryBeta').toggle(batteries);
     $('#bt_migrateEqLogic').toggle(supported && (conf.v2Available == 1 || v2Only) && (!isV2 || conf.tokenInvalid == 1));
 }
 
