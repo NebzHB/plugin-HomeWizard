@@ -276,7 +276,11 @@ $hwMigrationStart = init('eqLogic_id');
 			html += '<tr data-id="' + esc(eq.id) + '">';
 			html += '<td><img src="' + esc(eq.image) + '" /></td>';
 			html += '<td>' + eq.name + '</td>'; // getHumanName : déjà du html Jeedom
-			html += '<td><span class="label label-default">' + esc(eq.type) + '</span></td>';
+			html += '<td><span class="label label-default">' + esc(eq.type) + '</span>';
+			if (eq.type == 'HWE-BAT') {
+				html += ' <span class="label label-warning" title="{{Support de la Plug-In Battery encore en beta}}">beta</span>';
+			}
+			html += '</td>';
 			html += '<td><span class="label label-' + ((eq.apiVersion == 'v2') ? 'success' : 'default') + '">' + esc(eq.apiVersion || 'v1') + '</span>';
 			if (eq.canApiV1 && eq.apiV1 === 0) {
 				html += '<br /><small><i class="fas fa-shield-alt"></i> {{API v1 coupée}}</small>';
