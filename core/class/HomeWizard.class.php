@@ -315,21 +315,25 @@ class HomeWizard extends eqLogic {
 							$eqp->checkAndUpdateCmd($key,$value);
 						}
 					}
-					// temps de fonctionnement lisible (2j 14h 25min 06s) à côté de la valeur en secondes, qui reste pour l'historique
+					// date du dernier démarrage, déduite du temps de fonctionnement : elle ne change qu'au redémarrage de
+					// l'équipement, un scénario peut donc se déclencher dessus (historisée : la liste des redémarrages)
 					if(isset($val['uptime_s']) && is_numeric($val['uptime_s'])) {
-						if(!is_object($eqp->getCmd('info', 'uptime_txt'))) {
+						$bootCmd = $eqp->getCmd('info', 'boot_date');
+						if(!is_object($bootCmd)) {
 							$hasNewCmd = $eqp->createCmd([
-								'name'=>__("Temps de fonctionnement (Texte)", __FILE__),
-								'logicalId'=>'uptime_txt',
+								'name'=>__("Dernier démarrage", __FILE__),
+								'logicalId'=>'boot_date',
 								'type'=>'info',
 								'subtype'=>'string',
 								'isVisible'=>1,
-								'isHistorized'=>0,
+								'isHistorized'=>1,
 								'display'=>['forceReturnLineBefore'=>1],
 								'template'=>['dashboard'=>'line', 'mobile'=>'line']
 							]) || $hasNewCmd;
+							$bootCmd = $eqp->getCmd('info', 'boot_date');
 						}
-						$eqp->checkAndUpdateCmd('uptime_txt', self::formatDuration($val['uptime_s']));
+						$boot = self::bootDate($val['uptime_s'], is_object($bootCmd) ? $bootCmd->execCmd() : '');
+						if($boot !== null) $eqp->checkAndUpdateCmd('boot_date', $boot);
 					}
 					// groupe de Plug-In Batteries piloté par ce compteur : commandes action créées avec les infos
 					if(isset($val['batteries_mode'])) $eqp->createBatteriesActions();
@@ -798,12 +802,13 @@ class HomeWizard extends eqLogic {
 	}
 
 	/* Commandes action du groupe de Plug-In Batteries piloté par un compteur P1 ou un kWh Meter (API v2) */
-	/* Durée en secondes vers « 2j 14h 25min 06s » (les jours seulement s'il y en a) */
-	public static function formatDuration($_seconds) {
-		$seconds = max(0, intval($_seconds));
-		$days = intdiv($seconds, 86400);
-		$text = sprintf('%dh %02dmin %02ds', intdiv($seconds % 86400, 3600), intdiv($seconds % 3600, 60), $seconds % 60);
-		return ($days > 0) ? $days.__("j", __FILE__).' '.$text : $text;
+	/* Date de démarrage (Y-m-d H:i:s) depuis le temps de fonctionnement. null si elle ne change pas : le relevé dérive
+	   de quelques secondes (latence, arrondi), seul un écart de plus de 30 s est un vrai redémarrage */
+	public static function bootDate($_uptime, $_previous = '', $_now = null) {
+		$boot = (($_now === null) ? time() : $_now) - max(0, intval($_uptime));
+		$previous = ($_previous == '') ? false : strtotime($_previous);
+		if ($previous !== false && abs($boot - $previous) <= 30) return null;
+		return date('Y-m-d H:i:s', $boot);
 	}
 
 	/* Types génériques posés à la création (ceux que Homebridge sait utiliser) : la puissance et la consommation totales, la charge de la batterie */
