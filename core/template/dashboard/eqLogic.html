@@ -1,6 +1,6 @@
-<div class="eqLogic eqLogic-widget allowResize hw-widget #eqLogic_class# #class#" data-eqType="#eqType#" data-eqLogic_id="#id#" data-eqLogic_uid="#uid#" data-version="#version#" data-translate-category="#translate_category#" data-category="#category#" data-tags="#tags#" style="width:#width#;height:#height#;#style#">
+<div class="eqLogic eqLogic-widget allowResize hw-widget #eqLogic_class# #class#" data-eqType="#eqType#" data-eqLogic_id="#id#" data-eqLogic_uid="#uid#" data-version="#version#" data-translate-category="#translate_category#" data-category="#category#" data-tags="#tags#" data-hw_confirm="#hw_confirm#" style="width:#width#;height:#height#;#style#">
 	<style>
-		.hw-widget { min-width: 250px; }
+		.hw-widget { min-width: 250px; position: relative; }
 		.hw-widget .hw-body { padding: 4px 10px 8px 10px; text-align: left; }
 		.hw-widget .hw-head { display: flex; align-items: center; gap: 10px; }
 		.hw-widget .hw-img { width: 54px; height: 54px; object-fit: contain; flex: none; }
@@ -40,6 +40,11 @@
 		.hw-widget .hw-popup td:last-child { text-align: right; font-weight: 600; }
 		.hw-widget .hw-popup tr + tr td { border-top: 1px solid rgba(127,127,127,.2); }
 		.hw-widget .hw-waiting { margin-top: 8px; font-size: 12px; opacity: .8; }
+		.hw-widget .hw-confirm { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 20; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--al-danger-color, #e53935); box-shadow: 0 4px 14px rgba(0,0,0,.35); text-align: left; }
+		.hw-widget .hw-confirm-text { font-size: 13px; margin-bottom: 8px; white-space: normal; }
+		.hw-widget .hw-confirm-buttons { display: flex; justify-content: flex-end; gap: 6px; }
+		.hw-widget .hw-confirm button { -webkit-appearance: none; appearance: none; display: inline-block; width: auto; min-height: 0; height: 28px; margin: 0; padding: 0 12px; border: 0; border-radius: 4px; font-size: 13px; line-height: 28px; font-family: inherit; text-transform: none !important; text-shadow: none; box-shadow: none; cursor: pointer; color: inherit; background: rgba(127,127,127,.25); }
+		.hw-widget .hw-confirm button.hw-confirm-ok { color: #fff; background: var(--al-danger-color, #e53935); }
 	</style>
 	<center class="widget-name">
 		<span class="warning" title="#alert_name#"><i class='#alert_icon#'></i></span>
@@ -144,10 +149,96 @@
 				document.addEventListener('click', close);
 				window.addEventListener('scroll', close, true);
 			}
+			// Actions à confirmer : message propre à chaque commande. jeeDialog sur le dashboard desktop quand son style est chargé,
+			// sinon (mobile, style absent) un bandeau dans le widget. La commande n'est envoyée qu'au clic sur Confirmer.
+			var confirm = {cmds: {}};
+			try { confirm = JSON.parse(root.getAttribute('data-hw_confirm')) || confirm; } catch (e) {}
+			var dialogStyled = function() {
+				if (typeof jeeDialog === 'undefined' || typeof jeeDialog.confirm !== 'function') return false;
+				if (jeedom.display && jeedom.display.version == 'mobile') return false;
+				var probe = document.createElement('div');
+				probe.className = 'jeeDialog';
+				probe.style.visibility = 'hidden';
+				document.body.appendChild(probe);
+				var styled = window.getComputedStyle(probe).position != 'static';
+				probe.remove();
+				return styled;
+			};
+			var ask = function(message, onConfirm) {
+				if (dialogStyled()) {
+					jeeDialog.confirm(message, function(result) {
+						if (result) onConfirm();
+					});
+					return;
+				}
+				var old = root.querySelector('.hw-confirm');
+				if (old) old.remove();
+				var bar = document.createElement('div');
+				bar.className = 'hw-confirm';
+				var text = document.createElement('div');
+				text.className = 'hw-confirm-text';
+				text.textContent = message;
+				bar.appendChild(text);
+				var buttons = document.createElement('div');
+				buttons.className = 'hw-confirm-buttons';
+				var button = function(label, cls, action) {
+					var el = document.createElement('button');
+					el.type = 'button';
+					el.className = cls;
+					el.setAttribute('data-role', 'none'); // jQuery Mobile ne doit pas le transformer
+					el.textContent = label;
+					el.addEventListener('click', function(event) {
+						event.stopPropagation();
+						event.preventDefault();
+						if (!bar.parentNode) return; // bandeau déjà remplacé ou abandonné
+						clearTimeout(timer);
+						bar.remove();
+						if (action) action();
+					});
+					buttons.appendChild(el);
+				};
+				button(confirm.cancel || 'Annuler', 'hw-confirm-cancel');
+				button(confirm.ok || 'OK', 'hw-confirm-ok', onConfirm);
+				bar.appendChild(buttons);
+				bar.addEventListener('click', function(event) {
+					event.stopPropagation();
+				});
+				// mêmes couleurs que le widget, quel que soit le thème, mais opaques : un fond transparent laisserait voir le widget dessous
+				var style = window.getComputedStyle(root);
+				var rgb = (style.backgroundColor || '').match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,\/]+([\d.]+%?))?/);
+				var alpha = (rgb && rgb[4] !== undefined) ? parseFloat(rgb[4]) / (rgb[4].indexOf('%') != -1 ? 100 : 1) : 1;
+				bar.style.backgroundColor = (rgb && alpha > 0) ? 'rgb(' + rgb[1] + ', ' + rgb[2] + ', ' + rgb[3] + ')' : '#fff';
+				bar.style.color = (rgb && alpha > 0) ? style.color : '#333';
+				root.appendChild(bar);
+				var timer = setTimeout(function() { bar.remove(); }, 30000); // sans réponse : abandon
+			};
+			var run = function(id) {
+				if (!id || jeedom.cmd.disableExecute) return;
+				if (!confirm.cmds[id]) {
+					jeedom.cmd.execute({id: id});
+					return;
+				}
+				ask(confirm.cmds[id], function() {
+					jeedom.cmd.execute({id: id, confirmAction: 1});
+				});
+			};
+			// boutons des commandes action (widgets du core) : la question passe avant leur propre clic. Seulement les actions
+			// simples (sous-type other) : un curseur, une liste ou un message envoient une valeur que seul leur widget connaît,
+			// le core garde alors sa question générique.
+			root.addEventListener('click', function(event) {
+				var cmd = event.target.closest('.cmd[data-cmd_id]');
+				if (!cmd || !root.contains(cmd) || jeedom.cmd.disableExecute) return;
+				if ((cmd.getAttribute('data-subtype') || 'other') != 'other') return;
+				var id = cmd.getAttribute('data-cmd_id');
+				if (!confirm.cmds[id]) return;
+				event.stopPropagation();
+				event.preventDefault();
+				run(id);
+			}, true);
 			var button = root.querySelector('.hw-switch');
 			if (button) {
 				button.addEventListener('click', function() {
-					jeedom.cmd.execute({id: button.classList.contains('hw-on') ? button.getAttribute('data-hw_off') : button.getAttribute('data-hw_on')});
+					run(button.classList.contains('hw-on') ? button.getAttribute('data-hw_off') : button.getAttribute('data-hw_on'));
 				});
 			}
 		})();
