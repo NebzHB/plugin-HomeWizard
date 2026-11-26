@@ -1231,6 +1231,21 @@ class HomeWizard extends eqLogic {
 		else return 'plugins/HomeWizard/plugin_info/HomeWizard_icon.png';
 	}
 	
+	/* Question posée avant une action à confirmer (configuration actionConfirm) */
+	public static function confirmMessage($_cmd) {
+		switch ($_cmd->getLogicalId()) {
+			case 'action_cloud_off':
+				return __("Désactiver le cloud ? L'équipement ne se connectera plus au cloud HomeWizard, l'application HomeWizard Energy n'en recevra plus les données.", __FILE__);
+			case 'action_api_v1_off':
+				return __("Couper l'API v1 de cet équipement ? Il ne sera plus accessible qu'aux applications autorisées par son bouton, une application qui lit encore l'API v1 ne recevra plus rien.", __FILE__);
+			case 'action_reboot':
+				return __("Redémarrer l'équipement ? Il sera indisponible quelques secondes.", __FILE__);
+			case 'action_power_off':
+				return __("Eteindre la prise ? L'appareil branché dessus ne sera plus alimenté.", __FILE__);
+		}
+		return str_replace('%s', $_cmd->getName(), __("Exécuter « %s » ?", __FILE__));
+	}
+
 	/* Widget du plugin : la mesure principale, les totaux, les phases, l'état, puis les commandes action visibles */
 	public function toHtml($_version = 'dashboard') {
 		$replace = $this->preToHtml($_version);
@@ -1344,6 +1359,12 @@ class HomeWizard extends eqLogic {
 			$actions .= $cmd->toHtml($_version, '');
 		}
 		if ($actions != '') $actions = '<div class="hw-actions">'.$actions.'</div>';
+		// actions à confirmer : le widget pose la question avec un message propre à chaque commande
+		$confirm = ['cancel'=>__("Annuler", __FILE__), 'ok'=>__("Confirmer", __FILE__), 'cmds'=>new stdClass()];
+		foreach($this->getCmd('action') as $cmd) {
+			if ($cmd->getConfiguration('actionConfirm') == 1) $confirm['cmds']->{$cmd->getId()} = self::confirmMessage($cmd);
+		}
+		$replace['#hw_confirm#'] = htmlspecialchars(json_encode($confirm, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
 
 		$replace['#hw_actions#'] = $actions;
 		$replace['#hw_foot#'] = $foot;
