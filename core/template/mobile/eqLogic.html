@@ -222,10 +222,13 @@
 					jeedom.cmd.execute({id: id, confirmAction: 1});
 				});
 			};
-			// boutons des commandes action (widgets du core) : la question passe avant leur propre clic
+			// boutons des commandes action (widgets du core) : la question passe avant leur propre clic. Seulement les actions
+			// simples (sous-type other) : un curseur, une liste ou un message envoient une valeur que seul leur widget connaît,
+			// le core garde alors sa question générique.
 			root.addEventListener('click', function(event) {
 				var cmd = event.target.closest('.cmd[data-cmd_id]');
 				if (!cmd || !root.contains(cmd) || jeedom.cmd.disableExecute) return;
+				if ((cmd.getAttribute('data-subtype') || 'other') != 'other') return;
 				var id = cmd.getAttribute('data-cmd_id');
 				if (!confirm.cmds[id]) return;
 				event.stopPropagation();
