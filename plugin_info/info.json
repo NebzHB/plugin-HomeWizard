@@ -9,14 +9,15 @@
 		"it_IT": "Questo plugin consente di visualizzare i dati dei dispositivi HomeWizard Energy e di controllare le prese ad essi collegate. Individuazione delle apparecchiature tramite DNS multicast (mDNS) sulla stessa rete.",
 		"pt_PT": "Este plugin permite-lhe visualizar os dados dos dispositivos HomeWizard Energy e controlar as suas tomadas ligadas. Descoberta de equipamentos através de DNS multicast (mDNS) na mesma rede."
 	},
-	"utilization": "ATTENTION : Non supporté : Debian Buster(10) Stretch(9) Jessie(8) & Docker & Jeedom Mini+ & Raspberry Pi 1-2 & Raspberry Zéro (armv6) & i386 (32bits)\n\nJeedom DOIT être sur le même réseau que votre équipement. (pas de routage, pas de NAT) !!!",
+	"utilization": "ATTENTION : Non supporté : Debian Bullseye(11) Buster(10) Stretch(9) Jessie(8) & Docker & Jeedom Mini+ & Raspberry Pi 1-2 & Raspberry Zéro (armv6) & i386 (32bits)\n\nJeedom DOIT être sur le même réseau que votre équipement. (pas de routage, pas de NAT) !!!",
 	"licence": "AGPL",
 	"author": "Nebz",
 	"hasDependency": true,
 	"hasOwnDeamon": true,
 	"require": "4.4",
+	"requireOsVersion": "12",
 	"os": {
-		"min": 11
+		"min": 12
 	},
 	"category": "devicecommunication",
 	"issue": "https://github.com/NebzHB/jeedom_docs/issues",
