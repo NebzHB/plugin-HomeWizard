@@ -459,15 +459,30 @@ app.use(function(err, req, res, _next) {
 });
 
 
+// Etat d'une prise en API v1 (allumée, verrouillage, LED) relevé chaque seconde pour suivre vite un appui sur son bouton :
+// on ne l'envoie à Jeedom (et au log) que s'il a changé, ou au moins toutes les 5 minutes pour rester synchronisé.
+// Chaque réponse compte quand même pour le statut En ligne.
+const lastState = {};
+const stateResendDelay = 300000;
 function startStateInterval(index) {
 	if(!intervals[index]) {
+		delete lastState[index];
 		intervals[index] = setInterval(async () => {
 			try {
 				const state = await conn[index].getState();
+				if(!conn[index] || !conn[index].mdns) {return;}
+				const json = JSON.stringify(state);
+				if(lastState[index] && lastState[index].json === json && Date.now() - lastState[index].sent < stateResendDelay) {
+					lastSeen[index] = Date.now();
+					setOnline(index, true);
+					return;
+				}
+				lastState[index] = {json: json, sent: Date.now()};
 				eventReceived(index,state);
 			} catch(error) {
 				clearInterval(intervals[index]);
 				delete intervals[index];
+				delete lastState[index];
 				if(error.toString().includes("TimeoutError")) {
 					Logger.log(index+' (getState) : Ne réponds plus sur le réseau ('+error+')',LogType.ERROR);
 				} else {
@@ -512,6 +527,7 @@ function removeConnection(index) {
 		clearInterval(intervals[index]);
 		delete intervals[index];
 	}
+	delete lastState[index];
 	if(systemIntervals[index]) {
 		clearInterval(systemIntervals[index]);
 		delete systemIntervals[index];
