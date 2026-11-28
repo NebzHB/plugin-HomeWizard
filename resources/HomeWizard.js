@@ -467,7 +467,11 @@ const stateResendDelay = 300000;
 function startStateInterval(index) {
 	if(!intervals[index]) {
 		delete lastState[index];
-		intervals[index] = setInterval(async () => {
+		let pending = false;
+		const timer = setInterval(async () => {
+			// une réponse peut prendre jusqu'au délai d'attente (5s) : pas de nouvelle requête tant que la précédente n'est pas revenue
+			if(pending || !conn[index]) {return;}
+			pending = true;
 			try {
 				const state = await conn[index].getState();
 				if(!conn[index] || !conn[index].mdns) {return;}
@@ -480,7 +484,8 @@ function startStateInterval(index) {
 				lastState[index] = {json: json, sent: Date.now()};
 				eventReceived(index,state);
 			} catch(error) {
-				clearInterval(intervals[index]);
+				clearInterval(timer);
+				if(intervals[index] !== timer) {return;} // relevé déjà relancé par une reconnexion
 				delete intervals[index];
 				delete lastState[index];
 				if(error.toString().includes("TimeoutError")) {
@@ -488,8 +493,11 @@ function startStateInterval(index) {
 				} else {
 					Logger.log(index+' (getState) : '+error,LogType.ERROR);
 				}
+			} finally {
+				pending = false;
 			}
 		}, conf.pollingIntervals["HWE-SKT_state"]);
+		intervals[index] = timer;
 	}
 }
 
